@@ -40,11 +40,12 @@ class FakePortableClient implements CodexSdkRelayClient {
 }
 
 test("parses project-relative reusable configuration without product-specific routing", () => {
-  const parsed = parseRelayConfig({ version: "1.0", project_root: "../project-b", phase: "RELEASE", point: "DOCS", mission: "Review documentation." }, resolve("C:\\portable\\config"));
-  assert.equal(parsed.projectRoot, resolve("C:\\portable\\project-b"));
+  const configDirectory = resolve("portable", "config");
+  const parsed = parseRelayConfig({ version: "1.0", project_root: "../project-b", phase: "RELEASE", point: "DOCS", mission: "Review documentation." }, configDirectory);
+  assert.equal(parsed.projectRoot, resolve(configDirectory, "../project-b"));
   assert.equal(parsed.phase, "RELEASE");
   assert.equal(parsed.point, "DOCS");
-  assert.throws(() => parseRelayConfig({ version: "1.0", project_root: ".", phase: "X", point: "Y", mission: "Z", extra: true }, "C:\\portable"), (error) => error instanceof RelayConfigError && error.code === "CONFIG_KEYS_INVALID");
+  assert.throws(() => parseRelayConfig({ version: "1.0", project_root: ".", phase: "X", point: "Y", mission: "Z", extra: true }, resolve("portable")), (error) => error instanceof RelayConfigError && error.code === "CONFIG_KEYS_INVALID");
 });
 
 test("loads a portable config and canonicalizes its project root", async () => {

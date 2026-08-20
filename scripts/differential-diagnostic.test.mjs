@@ -1,12 +1,16 @@
 import assert from "node:assert/strict";
+import { join, resolve } from "node:path";
 import { test } from "node:test";
 import { AppServerClientError } from "../dist/app-server-client.js";
 import { runCommand } from "./differential-diagnostic.mjs";
 
+const syntheticCliDirectory = resolve("synthetic-cli");
+const syntheticExecutable = join(syntheticCliDirectory, process.platform === "win32" ? "codex.exe" : "codex");
+
 test("authoritative diagnostic invocation is bounded and synthetic", async () => {
   const calls = [];
-  const result = await runCommand(["--cli-dir", "C:\\synthetic cli", "--timeout-ms", "600000"], {
-    resolveExecutable: async () => "C:\\synthetic cli\\codex.exe",
+  const result = await runCommand(["--cli-dir", syntheticCliDirectory, "--timeout-ms", "600000"], {
+    resolveExecutable: async () => syntheticExecutable,
     spawnClient: () => ({
       async listModels() { calls.push("model/list"); return [{ id: "synthetic", isDefault: true }]; },
       async initialize() { calls.push("initialize"); calls.push("initialized"); },
@@ -31,8 +35,8 @@ test("authoritative invocation rejects missing CLI arguments without creating a 
 
 test("closes the real client when the App Server handshake fails", async () => {
   const calls = [];
-  const result = await runCommand(["--cli-dir", "C:\\synthetic cli", "--timeout-ms", "600000"], {
-    resolveExecutable: async () => "C:\\synthetic cli\\codex.exe",
+  const result = await runCommand(["--cli-dir", syntheticCliDirectory, "--timeout-ms", "600000"], {
+    resolveExecutable: async () => syntheticExecutable,
     spawnClient: () => ({
       async initialize() { calls.push("initialize"); throw new Error("server detail must not escape"); },
       async close() { calls.push("close"); return { exited: true, forced: false }; },
@@ -45,8 +49,8 @@ test("closes the real client when the App Server handshake fails", async () => {
 });
 
 test("reports the bounded failed stage and diagnostic without leaking arbitrary categories", async () => {
-  const result = await runCommand(["--cli-dir", "C:\\synthetic cli", "--timeout-ms", "600000"], {
-    resolveExecutable: async () => "C:\\synthetic cli\\codex.exe",
+  const result = await runCommand(["--cli-dir", syntheticCliDirectory, "--timeout-ms", "600000"], {
+    resolveExecutable: async () => syntheticExecutable,
     spawnClient: () => ({
       async initialize() {},
       async listModels() { return [{ id: "synthetic", isDefault: true }]; },

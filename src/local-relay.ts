@@ -29,6 +29,7 @@ export interface RelayResult {
   sessionId: string;
   threadIds: string[];
   deletedThreadIds: string[];
+  messages: readonly [MessageEnvelope, MessageEnvelope, MessageEnvelope];
   messageIds: string[];
   sequence: number[];
   transmissions: number;
@@ -162,6 +163,7 @@ export async function runLocalRelay(agent: RelayAgent, relayRequest: LocalRelayR
       sessionId,
       threadIds: [workThreadId, codexThreadId],
       deletedThreadIds: [],
+      messages: [mission, report, nextPrompt],
       messageIds: [mission.message_id, report.message_id, nextPrompt.message_id],
       sequence: [mission.sequence, report.sequence, nextPrompt.sequence],
       transmissions: 3,

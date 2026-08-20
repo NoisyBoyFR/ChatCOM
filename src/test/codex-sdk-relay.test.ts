@@ -22,7 +22,7 @@ function runDiagnosticFixture(mode: "success" | "timeout" | "unknown") {
   return { result, lines };
 }
 
-test("SDK runtime resolves to the canonical exact 0.148.0 native executable", { skip: process.platform !== "win32" }, async () => {
+test("SDK runtime resolves to the canonical exact 0.149.0 native executable", { skip: process.platform !== "win32" }, async () => {
   const runtime = await resolveBundledCodexRuntime();
   assert.equal(runtime, await realpath(runtime));
   assert.match(runtime, /node_modules[\\/]@openai[\\/]codex-win32-x64[\\/]vendor[\\/]x86_64-pc-windows-msvc[\\/]bin[\\/]codex\.exe$/iu);

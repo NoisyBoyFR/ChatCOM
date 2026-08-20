@@ -37,12 +37,16 @@ class FailingCleanupAgent extends FakeRelayAgent {
 }
 
 test("runs three automatic transmissions and stops before the second Codex mission", async () => {
-  const agent = new FakeRelayAgent(fixtureMessages().map((message) => JSON.stringify(message)));
+  const messages = fixtureMessages();
+  const agent = new FakeRelayAgent(messages.map((message) => JSON.stringify(message)));
   const result = await runLocalRelay(agent, relayRequest());
   assert.equal(result.transmissions, 3);
   assert.equal(result.completedTransmissions, 3);
   assert.equal(result.stoppedBeforeSecondCodexMission, true);
   assert.deepEqual(result.sequence, [1, 2, 3]);
+  assert.deepEqual(result.messages, messages);
+  assert.equal(result.messages[1].type, "REPORT");
+  assert.equal(result.messages[2].type, "NEXT_PROMPT");
   assert.deepEqual(agent.turns.map((turn) => turn.threadId), ["work-thread", "codex-thread", "work-thread"]);
   assert.deepEqual(agent.deletes, ["codex-thread", "work-thread"]);
 });

@@ -8,7 +8,7 @@ import { AppServerClientError, type AppServerCloseResult, type SafeTurnDiagnosti
 const DEFAULT_TIMEOUT_MS = 120_000;
 const STREAM_CLEANUP_TIMEOUT_MS = 5_000;
 const CODEX_HOME_DIRECTORY = ".codex";
-const EXPECTED_RUNTIME_VERSION = "0.148.0";
+const EXPECTED_RUNTIME_VERSION = "0.149.0";
 const moduleRequire = createRequire(import.meta.url);
 
 export type SdkRunStage = "LAUNCH" | "THREAD_CREATION" | "TURN_START" | "STREAM_ACTIVE" | "TERMINAL_ABSENT" | "TERMINAL_COMPLETED" | "TERMINAL_FAILED";

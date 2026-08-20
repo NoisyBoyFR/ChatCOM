@@ -9,6 +9,7 @@ import { runPortableCli } from "../portable-cli.js";
 import { runPortableRelay } from "../portable-relay.js";
 import { RelayConfigError, loadRelayConfig, parseRelayConfig, type PortableRelayConfig } from "../relay-config.js";
 import { createMessageForTests } from "../local-relay.js";
+import type { MessageEnvelope } from "../message-contract.js";
 
 const sessionId = "11111111-1111-4111-8111-111111111111";
 
@@ -65,6 +66,11 @@ test("runs the portable relay for independent project routes with structured out
     const client = new FakePortableClient(outputs(phase, point));
     const result = await runPortableRelay(config("C:\\portable\\workspace", phase, point), { timeoutMs: 10_000, sessionId, createClient: async () => client });
     assert.equal(result.relay.completedTransmissions, 3);
+    assert.deepEqual(result.relay.messages.map(({ type, content }) => ({ type, content })), [
+      { type: "MISSION", content: "mission" },
+      { type: "REPORT", content: "report" },
+      { type: "NEXT_PROMPT", content: "next" },
+    ]);
     assert.equal(result.cleanup, "CONFIRMED");
     assert.equal(client.initialized, true);
     assert.equal(client.closed, true);
@@ -85,9 +91,18 @@ test("portable CLI validates and runs through injected dependencies", async () =
 
   const run = await runPortableCli(["run", "--config", "relay.json", "--timeout-ms", "30000"], {
     loadConfig: async () => portableConfig,
-    runRelay: async (_loaded, timeoutMs) => ({ relay: { sessionId, threadIds: [], deletedThreadIds: [], messageIds: [], sequence: [1, 2, 3], transmissions: 3, completedTransmissions: timeoutMs === 30_000 ? 3 : 0, stoppedBeforeSecondCodexMission: true, cleanupFailures: [], cleanupErrors: [] }, cleanup: "CONFIRMED" }),
+    runRelay: async (_loaded, timeoutMs) => {
+      const [mission, report, nextPrompt] = outputs("PORTABLE-PHASE", "PORTABLE-POINT").map((message) => JSON.parse(message)) as [MessageEnvelope, MessageEnvelope, MessageEnvelope];
+      const messages = [
+        { ...mission, content: "LEAK_SENTINEL_MISSION" },
+        { ...report, content: "LEAK_SENTINEL_REPORT" },
+        { ...nextPrompt, content: "LEAK_SENTINEL_NEXT_PROMPT" },
+      ] as const;
+      return { relay: { sessionId, threadIds: [], deletedThreadIds: [], messages, messageIds: [], sequence: [1, 2, 3], transmissions: 3, completedTransmissions: timeoutMs === 30_000 ? 3 : 0, stoppedBeforeSecondCodexMission: true, cleanupFailures: [], cleanupErrors: [] }, cleanup: "CONFIRMED" };
+    },
   });
   assert.deepEqual(run, { exitCode: 0, line: "WORK_CODEX_RELAY kind=SUCCESS code=OK transmissions=3 cleanup=CONFIRMED" });
+  assert.equal(run.line.includes("LEAK_SENTINEL"), false);
 });
 
 test("portable CLI keeps failures bounded", async () => {

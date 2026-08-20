@@ -8,9 +8,13 @@ ChatCOM is a reusable local relay for structured communication between a Work re
 
 The reusable core has been separated from FitMyLife into its own project. Its configuration, message contract, routing, cleanup, bounded diagnostics, Codex SDK adapter, App Server fallback, and synthetic tests are available.
 
-ChatCOM is not yet declared operational for unattended real use. A successful real end-to-end relay and an independent review are still required.
+ChatCOM v0.2.0 is operational for its bounded local workflow. An authenticated
+Codex SDK lifecycle, a complete three-transmission Work ↔ Codex relay, and the
+App Server fallback have succeeded with confirmed cleanup. The safe evidence is
+recorded in [`.ai/PROOF.md`](.ai/PROOF.md).
 
-The extracted standalone baseline currently passes 66 deterministic tests, plus build, typecheck, configuration validation, and package dry-run checks.
+The operational baseline passes 66 deterministic tests, build, typecheck,
+configuration validation, package dry-run, and a production dependency audit.
 
 ## Safety model
 
@@ -20,6 +24,9 @@ The extracted standalone baseline currently passes 66 deterministic tests, plus 
 - project, phase, point, mission, and role instructions are configuration values;
 - user authority is never inferred;
 - terminal diagnostics are bounded and exclude prompts, responses, credentials, server messages, and stacks.
+
+The TypeScript API returns the three validated message envelopes to its caller.
+The CLI intentionally prints status metadata only.
 
 ## Requirements
 
@@ -67,6 +74,9 @@ import { loadRelayConfig, runPortableRelay } from "chatcom";
 
 const config = await loadRelayConfig("./relay.config.json");
 const result = await runPortableRelay(config, { timeoutMs: 600_000 });
+
+const [mission, report, nextPrompt] = result.relay.messages;
+// Consume validated content programmatically; do not print it in bounded diagnostics.
 ```
 
 ## Development
@@ -76,9 +86,17 @@ npm run build
 npm run typecheck
 npm test
 npm run validate-config
+npm run verify
 ```
 
 The diagnostic commands can contact a real Codex runtime. They must not be executed as part of ordinary unit tests or without explicit authorization.
+
+## Visual Studio Code workflow
+
+Use [`CODEX-CHATCOM-PROMPT.md`](CODEX-CHATCOM-PROMPT.md) as the single durable
+prompt for the Codex IDE extension. It drives one autonomous mission through
+inspection, implementation, verification, correction, closure, and one final
+report to Work.
 
 ## Origin
 

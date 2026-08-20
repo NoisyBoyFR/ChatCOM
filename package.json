@@ -1,6 +1,6 @@
 {
   "name": "chatcom",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "Reusable local communication relay between Work and Codex.",
   "type": "module",
@@ -17,6 +17,8 @@
   "files": [
     "dist",
     "!dist/test",
+    ".ai/PROOF.md",
+    "CODEX-CHATCOM-PROMPT.md",
     "README.md",
     "README.fr.md",
     "relay.config.example.json"
@@ -27,6 +29,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "npm run clean && npm run build && node --test dist/test/app-server-client.test.js dist/test/message-contract.test.js dist/test/local-relay.test.js dist/test/differential-diagnostic.test.js dist/test/codex-sdk-relay.test.js dist/test/portable-relay.test.js scripts/differential-diagnostic.test.mjs",
     "validate-config": "npm run build && node dist/portable-cli.js validate --config relay.config.example.json",
+    "verify": "npm run build && npm run typecheck && npm test && npm run validate-config && npm pack --dry-run",
     "diagnose:app-server": "node scripts/differential-diagnostic.mjs",
     "diagnose:sdk": "node scripts/sdk-diagnostic.mjs",
     "prepack": "npm run clean && npm run build"
@@ -35,7 +38,7 @@
     "node": ">=22"
   },
   "dependencies": {
-    "@openai/codex-sdk": "0.148.0"
+    "@openai/codex-sdk": "0.149.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

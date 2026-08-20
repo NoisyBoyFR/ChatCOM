@@ -1,0 +1,7 @@
+{
+  "version": "1.0",
+  "project_root": ".",
+  "phase": "PHASE-1",
+  "point": "POINT-1",
+  "mission": "Review the current project state and return a concise technical report without changing files."
+}

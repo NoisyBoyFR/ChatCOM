@@ -1,0 +1,9 @@
+{
+  "project": "ChatCOM",
+  "schema_version": "1.0",
+  "status": "EXTRACTED_PENDING_REAL_PROOF",
+  "source": "FitMyLife portable Work-Codex relay",
+  "current_scope": "Standalone reusable relay, configuration, CLI, SDK adapter, App Server fallback, bounded diagnostics and deterministic tests",
+  "real_w1_operational": false,
+  "next_step": "Independent audit, then one explicitly authorized real end-to-end proof"
+}

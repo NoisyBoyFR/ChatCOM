@@ -93,7 +93,15 @@ test("SDK adapter converts a failed turn to a bounded diagnostic", async () => {
   await assert.rejects(client.runTurn(id, "prompt"), (error) => {
     assert.ok(error instanceof AppServerClientError);
     assert.equal(error.code, "SDK_TURN_FAILED");
-    assert.deepEqual(error.diagnostic, { method: "codex-sdk", categoryUnknown: true, finalStatus: "failed", sdkStage: "TERMINAL_FAILED", sdkLastStage: "TERMINAL_FAILED" });
+    assert.equal(error.diagnostic?.method, "codex-sdk");
+    assert.equal(error.diagnostic?.finalStatus, "failed");
+    assert.equal(error.diagnostic?.sdkStage, "TERMINAL_FAILED");
+    assert.equal(error.diagnostic?.sdkLastStage, "TERMINAL_FAILED");
+    assert.equal(error.diagnostic?.terminal, "FAILED");
+    assert.equal(error.diagnostic?.threadStarted, true);
+    assert.equal(error.diagnostic?.turnStarted, true);
+    assert.equal(error.diagnostic?.streamClosed, true);
+    assert.equal(error.diagnostic?.failureCategory, "RUNTIME_FAILED");
     assert.equal(error.message.includes("sensitive"), false);
     return true;
   });
@@ -108,7 +116,13 @@ test("SDK adapter classifies a missing terminal after abort and waits for stream
   await assert.rejects(client.runTurn(id, "prompt"), (error) => {
     assert.ok(error instanceof AppServerClientError);
     assert.equal(error.code, "SDK_TURN_TIMEOUT");
-    assert.deepEqual(error.diagnostic, { method: "codex-sdk", categoryUnknown: true, finalStatus: "interrupted", sdkStage: "TERMINAL_ABSENT", sdkLastStage: "TURN_START" });
+    assert.equal(error.diagnostic?.finalStatus, "interrupted");
+    assert.equal(error.diagnostic?.sdkStage, "TERMINAL_ABSENT");
+    assert.equal(error.diagnostic?.sdkLastStage, "TURN_START");
+    assert.equal(error.diagnostic?.terminal, "ABSENT");
+    assert.equal(error.diagnostic?.threadStarted, true);
+    assert.equal(error.diagnostic?.turnStarted, true);
+    assert.equal(error.diagnostic?.streamClosed, true);
     return true;
   });
   await client.deleteThread(id);
@@ -125,7 +139,13 @@ test("SDK adapter propagates an external cancellation and closes the stream", as
   await assert.rejects(pending, (error) => {
     assert.ok(error instanceof AppServerClientError);
     assert.equal(error.code, "SDK_TURN_CANCELLED");
-    assert.deepEqual(error.diagnostic, { method: "codex-sdk", categoryUnknown: true, finalStatus: "interrupted", sdkStage: "TERMINAL_ABSENT", sdkLastStage: "TURN_START" });
+    assert.equal(error.diagnostic?.finalStatus, "interrupted");
+    assert.equal(error.diagnostic?.sdkStage, "TERMINAL_ABSENT");
+    assert.equal(error.diagnostic?.sdkLastStage, "TURN_START");
+    assert.equal(error.diagnostic?.terminal, "ABSENT");
+    assert.equal(error.diagnostic?.threadStarted, true);
+    assert.equal(error.diagnostic?.turnStarted, true);
+    assert.equal(error.diagnostic?.streamClosed, true);
     return true;
   });
   await client.deleteThread(id);

@@ -14,6 +14,8 @@ test("Electron window and preload keep renderer capabilities bounded", () => {
   assert.match(main, /webSecurity:\s*true/u);
   assert.match(main, /setPermissionRequestHandler/u);
   assert.match(main, /setWindowOpenHandler\(\(\) => \(\{ action: "deny" \}\)\)/u);
+  assert.match(main, /runDesktopPreflight/u);
+  assert.match(main, /PREFLIGHT_REQUIRED/u);
   assert.match(preload, /contextBridge\.exposeInMainWorld/u);
   assert.doesNotMatch(preload, /shell\s*:/u);
   assert.doesNotMatch(renderer, /from ["']electron/u);
@@ -22,8 +24,8 @@ test("Electron window and preload keep renderer capabilities bounded", () => {
 });
 
 test("renderer exposes the supervised flow and restrictive CSP", () => {
-  for (const id of ["choose-project", "start", "pause", "resume", "stop", "copy-diagnostic", "export-report", "timeline"]) assert.match(html, new RegExp(`id=["']${id}["']`, "u"));
-  assert.match(html, /WORK_LOCAL/u);
+  for (const id of ["choose-project", "start", "pause", "resume", "stop", "copy-diagnostic", "export-report", "verify-config", "decision-panel", "decision-response", "submit-decision", "timeline"]) assert.match(html, new RegExp(`id=["']${id}["']`, "u"));
+  assert.match(html, /data-i18n=["']subtitle["']/u);
   assert.match(html, /Content-Security-Policy/u);
   assert.match(html, /connect-src 'none'/u);
   assert.match(html, /object-src 'none'/u);

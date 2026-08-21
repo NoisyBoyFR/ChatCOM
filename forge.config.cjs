@@ -1,4 +1,7 @@
 const path = require("node:path");
+const fs = require("node:fs");
+
+const nativeRuntimeRelativePath = path.join("resources", "@openai", "codex-win32-x64", "vendor", "x86_64-pc-windows-msvc", "bin", "codex.exe");
 
 module.exports = {
   outDir: process.env.CHATCOM_OUT_DIR || "out-desktop",
@@ -15,7 +18,25 @@ module.exports = {
       FileDescription: "ChatCOM Desktop local supervised relay",
       ProductName: "ChatCOM Desktop",
     },
-    prune: false,
+  },
+  hooks: {
+    packageAfterCopy: async (buildPath, _electronVersion, platform, arch) => {
+      if (platform === "win32" && arch === "x64" && !fs.existsSync(path.resolve(__dirname, "node_modules/@openai/codex-win32-x64/vendor/x86_64-pc-windows-msvc/bin/codex.exe"))) {
+        throw new Error("CHATCOM_DESKTOP_RUNTIME_MISSING");
+      }
+    },
+    postPackage: async ({ platform, arch, outputPaths }) => {
+      if (platform !== "win32" || arch !== "x64") {
+        return;
+      }
+
+      const packagedRuntimeFound = outputPaths.some((outputPath) =>
+        fs.existsSync(path.join(outputPath, nativeRuntimeRelativePath)),
+      );
+      if (!packagedRuntimeFound) {
+        throw new Error("CHATCOM_DESKTOP_RUNTIME_MISSING");
+      }
+    },
   },
   rebuildConfig: {},
   makers: [
@@ -23,7 +44,7 @@ module.exports = {
       name: "@electron-forge/maker-squirrel",
       config: {
         name: "chatcom",
-        setupExe: "ChatCOM Setup.exe",
+        setupExe: "ChatCOM-Desktop-1.0.0-rc.3-Setup.exe",
         noMsi: true,
       },
     },

@@ -63,11 +63,17 @@ jobs:
       - name: Verify Windows installer
         run: >-
           node scripts/verify-desktop-package.mjs
-          --setup "out-desktop/make/squirrel.windows/x64/ChatCOM Setup.exe"
+          --setup "out-desktop/make/squirrel.windows/x64/ChatCOM-Desktop-1.0.0-rc.3-Setup.exe"
           --app "out-desktop/ChatCOM-win32-x64"
+          --manifest "out-desktop/desktop-build-manifest.json"
+          --sums "out-desktop/SHA256SUMS.txt"
 
       - name: Upload Windows installer
         uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808
         with:
-          name: chatcom-desktop-setup
-          path: out-desktop/make/squirrel.windows/x64/ChatCOM Setup.exe
+          name: chatcom-desktop-1.0.0-rc.3-windows-x64
+          path: |
+            out-desktop/make/squirrel.windows/x64/ChatCOM-Desktop-1.0.0-rc.3-Setup.exe
+            out-desktop/SHA256SUMS.txt
+            out-desktop/desktop-build-manifest.json
+          retention-days: 14

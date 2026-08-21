@@ -4,12 +4,23 @@ import { readFile, realpath, stat, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { ConversationOrchestrator, type ConversationSnapshot } from "../../../src/conversation/orchestrator.js";
 import { RelayFailure } from "../../../src/local-relay.js";
-import { DESKTOP_IPC_CHANNELS, type DesktopConfigureInput, type DesktopPreferences } from "../shared/ipc.js";
+import { runDesktopPreflight, type PreflightResult } from "../../../src/desktop/preflight.js";
+import { migratePreferences, preferencesForStorage, DEFAULT_PREFERENCES, type DesktopPreferences } from "../../../src/desktop/preferences.js";
+import { translate } from "../../../src/desktop/i18n.js";
+import { DESKTOP_IPC_CHANNELS, type DesktopConfigureInput } from "../shared/ipc.js";
 
 const orchestrator = new ConversationOrchestrator();
 let mainWindow: BrowserWindow | undefined;
 let closing = false;
 let selectedProjectRoot: string | undefined;
+let currentPreferences: DesktopPreferences = DEFAULT_PREFERENCES;
+let currentPreflight: PreflightResult = {
+  runtime: { status: "UNKNOWN" },
+  authentication: { status: "UNKNOWN" },
+  project: { status: "UNKNOWN" },
+  security: "READ_ONLY",
+  canStart: false,
+};
 
 function assertTrustedSender(event: Electron.IpcMainInvokeEvent): void {
   if (!mainWindow || event.sender !== mainWindow.webContents) throw new RelayFailure("IPC_SENDER_INVALID");
@@ -27,6 +38,7 @@ function requireInput(input: unknown): DesktopConfigureInput {
   if (Object.keys(value).length !== keys.length || keys.some((key) => !Object.prototype.hasOwnProperty.call(value, key))) throw new RelayFailure("IPC_INPUT_INVALID");
   if (!["projectRoot", "phase", "point", "mission"].every((key) => typeof value[key] === "string")) throw new RelayFailure("IPC_INPUT_INVALID");
   if (!["maxCycles", "cycleTimeoutMs", "globalTimeoutMs"].every((key) => typeof value[key] === "number" && Number.isSafeInteger(value[key]))) throw new RelayFailure("IPC_INPUT_INVALID");
+  if ((value.maxCycles as number) < 1 || (value.maxCycles as number) > 20 || (value.cycleTimeoutMs as number) <= 0 || (value.globalTimeoutMs as number) <= 0) throw new RelayFailure("IPC_INPUT_INVALID");
   return value as unknown as DesktopConfigureInput;
 }
 
@@ -37,22 +49,27 @@ async function preferencesPath(): Promise<string> {
 async function loadPreferences(): Promise<DesktopPreferences> {
   try {
     const parsed: unknown = JSON.parse(await readFile(await preferencesPath(), "utf8"));
-    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return {};
-    const value = parsed as Record<string, unknown>;
-    const preferences: DesktopPreferences = {};
-    if (typeof value.projectRoot === "string") preferences.projectRoot = value.projectRoot;
-    if (typeof value.phase === "string") preferences.phase = value.phase;
-    if (typeof value.point === "string") preferences.point = value.point;
-    if (typeof value.maxCycles === "number" && Number.isSafeInteger(value.maxCycles) && value.maxCycles >= 1 && value.maxCycles <= 20) preferences.maxCycles = value.maxCycles;
-    return preferences;
+    return migratePreferences(parsed, app.getLocale());
   } catch {
-    return {};
+    return migratePreferences(undefined, app.getLocale());
   }
 }
 
-async function savePreferences(input: DesktopConfigureInput): Promise<void> {
-  const preferences: DesktopPreferences = { projectRoot: input.projectRoot, phase: input.phase, point: input.point, maxCycles: input.maxCycles };
-  await writeFile(await preferencesPath(), JSON.stringify(preferences, null, 2), "utf8");
+async function savePreferences(preferences: DesktopPreferences): Promise<void> {
+  currentPreferences = preferencesForStorage(preferences);
+  await writeFile(await preferencesPath(), JSON.stringify(currentPreferences, null, 2), "utf8");
+}
+
+function applyWindowPreferences(): void {
+  if (!mainWindow) return;
+  if (currentPreferences.windowMode === "fullscreen") {
+    mainWindow.setFullScreen(true);
+    return;
+  }
+  mainWindow.setFullScreen(false);
+  if (currentPreferences.windowMode === "maximized") mainWindow.maximize();
+  else if (mainWindow.isMaximized()) mainWindow.unmaximize();
+  if (currentPreferences.windowMode === "normal") mainWindow.setSize(1280, 820, true);
 }
 
 async function validateProject(path: string): Promise<string> {
@@ -72,15 +89,17 @@ function sendEvent(event: import("../../../src/conversation/orchestrator.js").Co
 
 function registerIpc(): void {
   ipcMain.handle(DESKTOP_IPC_CHANNELS.getState, async (event) => {
-    try { assertTrustedSender(event); return { snapshot: orchestrator.snapshot(), preferences: await loadPreferences() }; }
+    try { assertTrustedSender(event); currentPreferences = await loadPreferences(); selectedProjectRoot = currentPreferences.projectRoot; return { snapshot: orchestrator.snapshot(), preferences: currentPreferences, preflight: currentPreflight }; }
     catch (error) { throw boundedError(error); }
   });
   ipcMain.handle(DESKTOP_IPC_CHANNELS.chooseProject, async (event) => {
     try {
       assertTrustedSender(event);
-      const result = await dialog.showOpenDialog(mainWindow as BrowserWindow, { title: "Choisir le projet à superviser", properties: ["openDirectory", "createDirectory"] });
+      const result = await dialog.showOpenDialog(mainWindow as BrowserWindow, { title: translate(currentPreferences.language, "chooseProject"), properties: ["openDirectory", "createDirectory"] });
       if (result.canceled || result.filePaths[0] === undefined) return { canceled: true };
       selectedProjectRoot = await validateProject(result.filePaths[0]);
+      await savePreferences({ ...currentPreferences, projectRoot: selectedProjectRoot });
+      currentPreflight = { ...currentPreflight, project: { status: "UNKNOWN" }, canStart: false };
       return { canceled: false, projectRoot: selectedProjectRoot };
     } catch (error) { throw boundedError(error); }
   });
@@ -91,12 +110,21 @@ function registerIpc(): void {
       const canonical = await validateProject(input.projectRoot);
       if (selectedProjectRoot === undefined || canonical !== selectedProjectRoot) throw new RelayFailure("PROJECT_SELECTION_REQUIRED");
       const snapshot = orchestrator.configure({ ...input, projectRoot: canonical });
-      await savePreferences(input);
+      currentPreferences = { ...currentPreferences, projectRoot: canonical, phase: input.phase, point: input.point, maxCycles: input.maxCycles };
+      currentPreflight = { ...currentPreflight, project: { status: "UNKNOWN" }, canStart: false };
+      await savePreferences(currentPreferences);
       return snapshot;
     } catch (error) { throw boundedError(error); }
   });
   ipcMain.handle(DESKTOP_IPC_CHANNELS.start, async (event) => {
-    try { assertTrustedSender(event); void orchestrator.start().catch((error) => sendEvent({ kind: "diagnostic", diagnostic: { code: error instanceof RelayFailure ? error.code : "DESKTOP_START_FAILED", completedTransmissions: 0, cleanup: "NOT_CONFIRMED" } })); return orchestrator.snapshot(); }
+    try {
+      assertTrustedSender(event);
+      if (selectedProjectRoot === undefined) throw new RelayFailure("PREFLIGHT_REQUIRED");
+      currentPreflight = await runDesktopPreflight(selectedProjectRoot);
+      if (!currentPreflight.canStart) throw new RelayFailure("PREFLIGHT_REQUIRED");
+      void orchestrator.start().catch((error) => sendEvent({ kind: "diagnostic", diagnostic: { code: error instanceof RelayFailure ? error.code : "DESKTOP_START_FAILED", completedTransmissions: 0, cleanup: "NOT_CONFIRMED" } }));
+      return orchestrator.snapshot();
+    }
     catch (error) { throw boundedError(error); }
   });
   ipcMain.handle(DESKTOP_IPC_CHANNELS.pause, async (event) => {
@@ -106,6 +134,36 @@ function registerIpc(): void {
   ipcMain.handle(DESKTOP_IPC_CHANNELS.resume, async (event) => {
     try { assertTrustedSender(event); void orchestrator.resume().catch((error) => sendEvent({ kind: "diagnostic", diagnostic: { code: error instanceof RelayFailure ? error.code : "DESKTOP_RESUME_FAILED", completedTransmissions: 0, cleanup: "NOT_CONFIRMED" } })); return orchestrator.snapshot(); }
     catch (error) { throw boundedError(error); }
+  });
+  ipcMain.handle(DESKTOP_IPC_CHANNELS.submitDecision, async (event, response: unknown) => {
+    try { assertTrustedSender(event); if (typeof response !== "string") throw new RelayFailure("DECISION_RESPONSE_INVALID"); return orchestrator.submitDecision(response); }
+    catch (error) { throw boundedError(error); }
+  });
+  ipcMain.handle(DESKTOP_IPC_CHANNELS.preflight, async (event) => {
+    try {
+      assertTrustedSender(event);
+      currentPreflight = selectedProjectRoot === undefined
+        ? { runtime: { status: "UNKNOWN" }, authentication: { status: "UNKNOWN" }, project: { status: "ERROR" }, security: "READ_ONLY", canStart: false }
+        : await runDesktopPreflight(selectedProjectRoot);
+      return currentPreflight;
+    } catch (error) { throw boundedError(error); }
+  });
+  ipcMain.handle(DESKTOP_IPC_CHANNELS.updatePreferences, async (event, rawInput: unknown) => {
+    try {
+      assertTrustedSender(event);
+      if (typeof rawInput !== "object" || rawInput === null || Array.isArray(rawInput)) throw new RelayFailure("IPC_INPUT_INVALID");
+      const value = rawInput as Record<string, unknown>;
+      const allowed = ["language", "theme", "windowMode", "textSize", "reduceMotion", "autoScroll"];
+      if (Object.keys(value).some((key) => !allowed.includes(key))) throw new RelayFailure("IPC_INPUT_INVALID");
+      if (Object.prototype.hasOwnProperty.call(value, "language") && typeof value.language !== "string") throw new RelayFailure("IPC_INPUT_INVALID");
+      if (Object.prototype.hasOwnProperty.call(value, "theme") && !["system", "light", "dark"].includes(String(value.theme))) throw new RelayFailure("IPC_INPUT_INVALID");
+      if (Object.prototype.hasOwnProperty.call(value, "windowMode") && !["normal", "maximized", "fullscreen"].includes(String(value.windowMode))) throw new RelayFailure("IPC_INPUT_INVALID");
+      if (Object.prototype.hasOwnProperty.call(value, "textSize") && !["small", "normal", "large"].includes(String(value.textSize))) throw new RelayFailure("IPC_INPUT_INVALID");
+      if (["reduceMotion", "autoScroll"].some((key) => Object.prototype.hasOwnProperty.call(value, key) && typeof value[key] !== "boolean")) throw new RelayFailure("IPC_INPUT_INVALID");
+      await savePreferences(migratePreferences({ ...currentPreferences, ...value }, app.getLocale()));
+      applyWindowPreferences();
+      return currentPreferences;
+    } catch (error) { throw boundedError(error); }
   });
   ipcMain.handle(DESKTOP_IPC_CHANNELS.stop, async (event) => {
     try { assertTrustedSender(event); await orchestrator.stop(); return orchestrator.snapshot(); }
@@ -131,7 +189,7 @@ function registerIpc(): void {
     } catch (error) { throw boundedError(error); }
   });
   ipcMain.handle(DESKTOP_IPC_CHANNELS.resetPreferences, async (event) => {
-    try { assertTrustedSender(event); try { await unlink(await preferencesPath()); } catch { /* absent is already reset */ } }
+    try { assertTrustedSender(event); try { await unlink(await preferencesPath()); } catch { /* absent is already reset */ } currentPreferences = migratePreferences(undefined, app.getLocale()); applyWindowPreferences(); }
     catch (error) { throw boundedError(error); }
   });
 }
@@ -167,7 +225,7 @@ async function createWindow(): Promise<void> {
     if (closing) return;
     if (!["RUNNING", "PAUSE_REQUESTED", "STOPPING"].includes(orchestrator.snapshot().state)) return;
     event.preventDefault();
-    void dialog.showMessageBox(mainWindow as BrowserWindow, { type: "warning", buttons: ["Annuler", "Arrêter et quitter"], defaultId: 0, cancelId: 0, title: "Relais en cours", message: "ChatCOM doit terminer l’annulation et le nettoyage avant de quitter." }).then(async (answer) => {
+    void dialog.showMessageBox(mainWindow as BrowserWindow, { type: "warning", buttons: [translate(currentPreferences.language, "cancel"), translate(currentPreferences.language, "stopAndQuit")], defaultId: 0, cancelId: 0, title: translate(currentPreferences.language, "relayState"), message: translate(currentPreferences.language, "closeWhileRunning") }).then(async (answer) => {
       if (answer.response !== 1) return;
       closing = true;
       await orchestrator.stop();
@@ -181,11 +239,14 @@ async function createWindow(): Promise<void> {
     try { await mainWindow.loadFile(rendererPath); }
     catch { console.error("CHATCOM_DESKTOP kind=FAILURE code=RENDER_LOAD_FAILED"); }
   }
+  applyWindowPreferences();
   mainWindow.show();
 }
 
 app.whenReady().then(async () => {
   session.defaultSession.setPermissionRequestHandler((_webContents, _permission, callback) => callback(false));
+  currentPreferences = await loadPreferences();
+  selectedProjectRoot = currentPreferences.projectRoot;
   registerIpc();
   orchestrator.subscribe(sendEvent);
   await createWindow();

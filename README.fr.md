@@ -8,7 +8,7 @@ ChatCOM est un relay local réutilisable pour une communication structurée entr
 
 Le noyau réutilisable a été séparé de FitMyLife dans un projet autonome. La configuration, le contrat de messages, le routage, le nettoyage, les diagnostics bornés, l’adaptateur Codex SDK, le fallback App Server et les tests synthétiques sont disponibles.
 
-ChatCOM `1.0.0-rc.2` est la candidate de publication du relay local borné. Elle
+ChatCOM `1.0.0-rc.3` est la candidate de publication du relay local borné. Elle
 ajoute au pont MCP STDIO v0.3.0 un contrat de messages TypeScript/MCP strict et
 partagé, une annulation hôte propagée et bornée, la cohérence validée des
 sessions du relay et une matrice CI multi-plateforme.
@@ -23,7 +23,7 @@ validation de configuration, le contrôle d’archive à blanc et l’audit des
 dépendances de production. La CI exécute le même garde-fou sur Ubuntu, Windows
 et macOS.
 
-## ChatCOM Desktop 1.0.0-rc.2
+## ChatCOM Desktop 1.0.0-rc.3
 
 La candidate Windows fournit une interface locale supervisee pour le workflow
 en lecture seule `WORK_LOCAL` vers `CODEX_LOCAL`. Elle guide le choix du projet,
@@ -187,9 +187,37 @@ npm run verify
 
 Les commandes de diagnostic peuvent contacter un runtime Codex réel. Elles ne doivent pas être exécutées par les tests ordinaires ni sans autorisation explicite.
 
-`1.0.0-rc.2` n’est pas une publication formelle. La création d’un tag, d’une
+`1.0.0-rc.3` n’est pas une publication formelle. La création d’un tag, d’une
 GitHub Release ou d’une publication npm exige une autorisation explicite séparée.
 La procédure contrôlée est décrite dans [`RELEASING.md`](RELEASING.md).
+
+## Desktop 1.0.0-rc.3
+
+Desktop fournit des traductions statiques et hors ligne pour `fr-FR`, `en-US`,
+`zh-CN` (chinois simplifié) et `ru-RU` (russe). Au premier démarrage, la
+langue Windows est utilisée lorsqu’elle est prise en charge ; sinon le français
+est utilisé. Le changement est immédiat dans Paramètres et est conservé dans
+les préférences Electron versionnées.
+
+Les paramètres proposent les thèmes Système/Clair/Sombre, les modes fenêtre
+normale/maximisée/plein écran, les tailles de texte Petite/Normale/Grande, la
+réduction des animations, le défilement automatique et une réinitialisation
+sûre. `F11` active ou désactive le plein écran et `Échap` en sort. Les
+préférences ne contiennent ni mission, contenu de message, diagnostic, token,
+identifiant de thread ni réponse utilisateur. Les préférences RC.2 sont
+migrées et les valeurs invalides reviennent à des valeurs sûres.
+
+Chaque champ indique Obligatoire, Recommandé ou Optionnel, fournit une aide
+pour débutant et affiche son erreur près du champ. Démarrer reste désactivé
+tant que le formulaire et le préflight lecture seule sans modèle ne sont pas
+valides.
+
+L’installateur Windows est `ChatCOM-Desktop-1.0.0-rc.3-Setup.exe`. Il est
+non signé, s’installe pour l’utilisateur, ne modifie pas PATH, ne configure pas
+MCP et ne démarre aucun relais. L’artefact GitHub Actions exact est
+`chatcom-desktop-1.0.0-rc.3-windows-x64` ; il contient l’installateur,
+`SHA256SUMS.txt` et `desktop-build-manifest.json`. Il s’agit d’un résultat de
+build et de tests synthétiques, pas d’une preuve réelle WORK ↔ Codex.
 
 ## Workflow Visual Studio Code
 

@@ -125,7 +125,7 @@ test("portable CLI validates and runs through injected dependencies", async () =
         { ...report, content: "LEAK_SENTINEL_REPORT" },
         { ...nextPrompt, content: "LEAK_SENTINEL_NEXT_PROMPT" },
       ] as const;
-      return { relay: { sessionId, threadIds: [], deletedThreadIds: [], messages, messageIds: [], sequence: [1, 2, 3], transmissions: 3, completedTransmissions: timeoutMs === 30_000 ? 3 : 0, stoppedBeforeSecondCodexMission: true, cleanupFailures: [], cleanupErrors: [] }, cleanup: "CONFIRMED" };
+      return { relay: { sessionId, threadIds: [], deletedThreadIds: [], messages, messageIds: [], sequence: [1, 2, 3], transmissions: 3, completedTransmissions: timeoutMs === 30_000 ? 3 : 0, stoppedBeforeSecondCodexMission: true, requiresUserDecision: false, cleanupFailures: [], cleanupErrors: [] }, cleanup: "CONFIRMED" };
     },
   });
   assert.deepEqual(run, { exitCode: 0, line: "WORK_CODEX_RELAY kind=SUCCESS code=OK transmissions=3 cleanup=CONFIRMED" });

@@ -54,6 +54,7 @@ export interface MessageRouteExpectation {
   correlationId: string;
   phase: string;
   point: string;
+  userActionNeeded?: boolean;
 }
 
 export class MessageContractError extends Error {
@@ -113,7 +114,6 @@ function assertRoleCoherence(message: MessageEnvelope): void {
     NEXT_PROMPT: [["WORK_LOCAL", "CODEX_LOCAL"]],
     USER_DECISION_REQUIRED: [
       ["WORK_LOCAL", "USER"],
-      ["CODEX_LOCAL", "USER"],
     ],
     ERROR: [
       ["WORK_LOCAL", "CODEX_LOCAL"],
@@ -178,8 +178,12 @@ export function validateRelayMessages(value: readonly MessageEnvelope[]): readon
   const [mission, report, nextPrompt] = messages;
   assert(
       mission.type === "MISSION" && mission.sender === "WORK_LOCAL" && mission.recipient === "CODEX_LOCAL" &&
+      !mission.user_action_needed && mission.delivery_status === "CREATED" &&
       report.type === "REPORT" && report.sender === "CODEX_LOCAL" && report.recipient === "WORK_LOCAL" &&
-      nextPrompt.type === "NEXT_PROMPT" && nextPrompt.sender === "WORK_LOCAL" && nextPrompt.recipient === "CODEX_LOCAL" &&
+      !report.user_action_needed && report.delivery_status === "CREATED" &&
+      ((nextPrompt.type === "NEXT_PROMPT" && nextPrompt.sender === "WORK_LOCAL" && nextPrompt.recipient === "CODEX_LOCAL" && !nextPrompt.user_action_needed) ||
+      (nextPrompt.type === "USER_DECISION_REQUIRED" && nextPrompt.sender === "WORK_LOCAL" && nextPrompt.recipient === "USER" && nextPrompt.user_action_needed)) &&
+      nextPrompt.delivery_status === "CREATED" &&
       mission.correlation_id === mission.session_id &&
       report.correlation_id === mission.message_id && nextPrompt.correlation_id === report.message_id &&
       mission.session_id === report.session_id && report.session_id === nextPrompt.session_id &&
@@ -268,7 +272,16 @@ export function createMessageOutputSchema(expectation: MessageRouteExpectation) 
       content: { type: "string", minLength: 1, description: "UTF-8 byte length is bounded by MAX_CONTENT_BYTES at runtime." },
       created_at: { type: "string", pattern: MESSAGE_DATE_PATTERN.source },
       delivery_status: { const: "CREATED" },
-      user_action_needed: { const: false },
+      user_action_needed: { const: expectation.userActionNeeded ?? false },
     },
+  } as const;
+}
+
+export function createDecisionAwareMessageOutputSchema(expectation: Omit<MessageRouteExpectation, "type" | "recipient" | "userActionNeeded">) {
+  return {
+    anyOf: [
+      createMessageOutputSchema({ ...expectation, type: "NEXT_PROMPT", recipient: "CODEX_LOCAL", userActionNeeded: false }),
+      createMessageOutputSchema({ ...expectation, type: "USER_DECISION_REQUIRED", recipient: "USER", userActionNeeded: true }),
+    ],
   } as const;
 }

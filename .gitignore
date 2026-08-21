@@ -2,6 +2,10 @@ node_modules/
 dist/
 *.tgz
 *.log
+.vite/
+out/
+out-desktop/
+out-desktop-*/
 .env
 .env.*
 !.env.example

@@ -4,6 +4,16 @@ This procedure describes a formal release. It does not grant authority to run
 any step. Tags, GitHub Releases, and npm publication each require explicit user
 authorization.
 
+## Desktop candidate
+
+For `1.0.0-rc.2`, the Windows desktop artifact is a validation artifact, not a
+formal publication. Build it with `npm run desktop:make` and verify it with
+`scripts/verify-desktop-package.mjs`. The Squirrel installer is unsigned, does
+not require elevation, and must not be uploaded as a GitHub Release unless a
+separate publication authorization names the exact tag and release. The
+packaged desktop runtime must keep the read-only project boundary, disabled
+approvals, bounded diagnostics, and the three-transmission route.
+
 ## Release gate
 
 1. Start from a clean `main` aligned with `origin/main`.

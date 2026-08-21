@@ -8,7 +8,7 @@ ChatCOM is a reusable local relay for structured communication between a Work re
 
 The reusable core has been separated from FitMyLife into its own project. Its configuration, message contract, routing, cleanup, bounded diagnostics, Codex SDK adapter, App Server fallback, and synthetic tests are available.
 
-ChatCOM `1.0.0-rc.1` is the release candidate for the bounded local relay. It
+ChatCOM `1.0.0-rc.2` is the release candidate for the bounded local relay. It
 adds a strict shared TypeScript/MCP message contract, propagated and bounded
 host cancellation, validated relay-session coherence, and a multi-platform CI
 matrix to the v0.3.0 STDIO MCP bridge.
@@ -20,6 +20,35 @@ and earlier runtime evidence are recorded in [`.ai/PROOF.md`](.ai/PROOF.md).
 The candidate passes 83 deterministic tests, build, typecheck, configuration
 validation, package dry-run, and a production dependency audit. CI validates
 the same gate on Ubuntu, Windows, and macOS.
+
+## ChatCOM Desktop 1.0.0-rc.2
+
+The Windows desktop candidate is a local supervised GUI for the `WORK_LOCAL`
+to `CODEX_LOCAL` read-only workflow. It guides project selection and the phase,
+point, mission, and cycle limit, then displays the bounded timeline
+`MISSION -> REPORT -> NEXT_PROMPT` for each cycle. Pause, resume, stop, bounded
+diagnostics, and JSON report export are available from the window.
+
+The unsigned `ChatCOM Setup.exe` is produced by the Windows CI artifact. It
+does not require administrator rights, change PATH, or add MCP configuration to
+Codex. Preferences are stored only in Electron user data; reset them from the
+GUI or uninstall the application through Windows. The supervised project is
+never written by the desktop relay, and the renderer cannot run arbitrary
+commands. A real Codex proof is not implied by the installer or by synthetic
+tests.
+
+Developer commands:
+
+```powershell
+npm run desktop:dev
+npm run desktop:typecheck
+npm run desktop:make
+```
+
+`desktop:make` creates the Windows Squirrel installer in `out-desktop`. The
+bundled native Codex runtime is included in the Windows package; an authenticated
+Codex account is still required to run a relay. The CLI and MCP bridge remain
+available separately for hosts that do not use the desktop GUI.
 
 ## Safety model
 
@@ -154,7 +183,7 @@ npm run verify
 `npm run verify` also runs the production dependency audit and package dry-run.
 The diagnostic commands can contact a real Codex runtime. They must not be executed as part of ordinary unit tests or without explicit authorization.
 
-`1.0.0-rc.1` is not a formal release. Creating a tag, GitHub Release, or npm
+`1.0.0-rc.2` is not a formal release. Creating a tag, GitHub Release, or npm
 publication requires separate explicit authorization. See
 [`RELEASING.md`](RELEASING.md) for the gated release procedure.
 

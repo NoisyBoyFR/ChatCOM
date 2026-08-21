@@ -1,0 +1,85 @@
+# Changelog
+
+All notable ChatCOM changes are recorded in this file. Dates use the ISO `YYYY-MM-DD` format.
+
+## [Unreleased]
+
+No unreleased changes.
+
+## [1.0.0-rc.3] - 2026-08-21
+
+### Added
+
+- Electron and TypeScript Windows desktop interface for supervised WORK_LOCAL ↔ CODEX_LOCAL communication.
+- Guided beginner configuration with required, recommended, and optional field explanations.
+- Offline French, English, Simplified Chinese, and Russian translations.
+- System, Light, and Dark themes; normal, maximized, and fullscreen window modes.
+- Text-size, reduced-motion, timeline auto-scroll, safe preference reset, and RC.2 preference migration.
+- Runtime, authentication, project, and read-only Desktop preflight.
+- Explicit `USER_DECISION_REQUIRED` route and resume only after a validated user response.
+- Versioned Squirrel.Windows installer, checksum file, and machine-readable build manifest.
+- GitHub Actions Windows x64 artifact alongside Ubuntu, Windows, and macOS validation.
+
+### Changed
+
+- Expanded the deterministic validation suite to 109 tests.
+- Improved bounded SDK failure categories and Desktop diagnostics.
+- Made the native Codex runtime copy and final package verification deterministic.
+
+### Security
+
+- Preserved read-only execution and `approvalPolicy: "never"`.
+- Kept Electron Node integration disabled with context isolation, sandboxing, restrictive CSP, and allowlisted IPC.
+- Preferences exclude mission text, message content, diagnostics, tokens, thread IDs, and user responses.
+
+### Distribution
+
+- Published as the `v1.0.0-rc.3` GitHub pre-release.
+- The Windows installer is unsigned and is not a stable `v1.0.0` release.
+- No npm publication is included.
+
+## [1.0.0-rc.2] - 2026-08-21
+
+### Added
+
+- Initial supervised Electron Desktop candidate and multi-cycle conversation orchestrator.
+- Visual three-message timeline, pause, resume, stop, export, and bounded error states.
+- Electron Forge and Squirrel.Windows packaging with a bundled native Codex runtime.
+
+### Changed
+
+- Added safe SDK failure classification and a Desktop readiness preflight.
+- Corrected the user-decision route and packaging hook order during RC.2 hardening.
+
+### Known limitation
+
+- RC.2 did not complete a real GUI-driven relay proof.
+
+## [1.0.0-rc.1] - 2026-08-21
+
+### Added
+
+- Version 1.0 message contract, propagated host cancellation, strict session coherence, and multi-platform CI.
+- Successful real MCP release-candidate proof with exactly three transmissions and confirmed cleanup.
+
+## [0.3.0] - 2026-08-21
+
+### Added
+
+- STDIO MCP bridge exposing configuration validation and one authorized relay.
+- Strict structured tool results and bounded, content-free terminal diagnostics.
+- Successful real MCP proof from validation through cleanup.
+
+## [0.2.0] - 2026-08-21
+
+### Added
+
+- Standalone reusable TypeScript relay extracted from the original FitMyLife workflow.
+- Portable CLI, Codex SDK adapter, App Server fallback, configuration validation, cleanup checks, and operational proof.
+
+[Unreleased]: https://github.com/NoisyBoyFR/ChatCOM/compare/v1.0.0-rc.3...HEAD
+[1.0.0-rc.3]: https://github.com/NoisyBoyFR/ChatCOM/releases/tag/v1.0.0-rc.3
+[1.0.0-rc.2]: https://github.com/NoisyBoyFR/ChatCOM/commit/acea382d0ab73d29a637438184cb5e96295b6bfc
+[1.0.0-rc.1]: https://github.com/NoisyBoyFR/ChatCOM/commit/b084df64ccb3f9f84576eef03baae79860abba8a
+[0.3.0]: https://github.com/NoisyBoyFR/ChatCOM/commit/402cc27601b0c30a53f99fb3baf66c9f274157e0
+[0.2.0]: https://github.com/NoisyBoyFR/ChatCOM/releases/tag/v0.2.0

@@ -133,6 +133,79 @@ Exécute `npm run verify`, puis les preuves réelles explicitement autorisées p
 la directive lorsqu'elles sont nécessaires. Ne masque, ne désactive et ne
 contourne aucun test.
 
+RÈGLE PERMANENTE — MISE À JOUR GITHUB
+
+Après chaque nouvelle version de ChatCOM entièrement corrigée et validée, mets
+systématiquement à jour le dépôt GitHub public :
+
+https://github.com/NoisyBoyFR/ChatCOM
+
+Workflow obligatoire :
+
+1. synchroniser la branche avec `origin/main` ;
+2. créer une branche dédiée à la version ;
+3. conserver les modifications utilisateur ;
+4. exécuter toutes les validations ;
+5. créer des commits propres et limités à ChatCOM ;
+6. pousser la branche ;
+7. ouvrir une Pull Request ;
+8. attendre et contrôler toute la CI ;
+9. corriger les échecs en boucle ;
+10. fusionner uniquement lorsque toute la CI est verte ;
+11. synchroniser `main` local avec `origin/main` ;
+12. mettre à jour `README.md` et `README.fr.md` ;
+13. mettre à jour `CHANGELOG.md` et `RELEASING.md` ;
+14. actualiser les liens de téléchargement ;
+15. supprimer les branches fusionnées ;
+16. vérifier que `main` est propre et synchronisée.
+
+Pour chaque version publiable, créer également :
+
+- un nouveau tag SemVer ;
+- une GitHub Release correspondant exactement au tag ;
+- le Setup EXE ;
+- le paquet Squirrel full `.nupkg` ;
+- le fichier `RELEASES` ;
+- `SHA256SUMS.txt` ;
+- `desktop-build-manifest.json` ;
+- des notes de version françaises et anglaises.
+
+Règles de publication :
+
+- ne jamais modifier ou réutiliser un ancien tag ;
+- ne jamais remplacer silencieusement un ancien Setup ;
+- chaque nouvelle version possède son propre numéro ;
+- une RC doit être marquée GitHub Pre-release ;
+- une version stable ne doit pas être créée avant validation produit ;
+- ne jamais publier un installateur non signé dans le canal public de mise à jour ;
+- si la signature manque, fusionner les améliorations validées sur GitHub mais
+  laisser le tag, la Release et l’auto-update public bloqués ;
+- aucun `npm publish` sans autorisation distincte ;
+- ne jamais publier si les tests, le smoke Electron, l’upgrade synthétique ou
+  la CI échouent.
+
+Le rapport final à WORK doit toujours fournir :
+
+- le numéro de version ;
+- la branche et les commits ;
+- le lien de la PR ;
+- les liens des CI ;
+- le commit final de `main` ;
+- le lien de la GitHub Release si elle est autorisée ;
+- les liens directs des artefacts ;
+- les SHA-256 ;
+- l’état de signature ;
+- l’état du dépôt local et distant ;
+- la confirmation des opérations volontairement non exécutées.
+
+Pour RC.4, GitHub peut recevoir le code validé par PR et fusion. En revanche,
+la Release et l’auto-update public doivent attendre la signature Authenticode
+et la correction complète des défauts locaux.
+
+Les opérations GitHub restent soumises aux autorisations explicites de la
+directive active ; cette règle définit le workflow obligatoire lorsqu’une
+version validée est autorisée à être publiée.
+
 GIT ET GITHUB
 
 Les permissions Git/GitHub sont définies uniquement dans la directive active.

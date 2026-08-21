@@ -7,7 +7,7 @@ export const MAX_ROUTE_BYTES = 256;
 export const MESSAGE_UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 export const MESSAGE_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u;
 
-export const MESSAGE_ROLES = ["WORK_LOCAL", "CODEX_LOCAL", "USER"] as const;
+export const MESSAGE_ROLES = ["WORK_LOCAL", "WORK_HOST", "CODEX_LOCAL", "USER"] as const;
 export type MessageRole = (typeof MESSAGE_ROLES)[number];
 
 export const MESSAGE_TYPES = [
@@ -109,9 +109,9 @@ function assertDate(value: unknown, code: string): asserts value is string {
 
 function assertRoleCoherence(message: MessageEnvelope): void {
   const expected: Record<MessageType, readonly [MessageRole, MessageRole][]> = {
-    MISSION: [["WORK_LOCAL", "CODEX_LOCAL"]],
-    REPORT: [["CODEX_LOCAL", "WORK_LOCAL"]],
-    NEXT_PROMPT: [["WORK_LOCAL", "CODEX_LOCAL"]],
+    MISSION: [["WORK_LOCAL", "CODEX_LOCAL"], ["WORK_HOST", "CODEX_LOCAL"]],
+    REPORT: [["CODEX_LOCAL", "WORK_LOCAL"], ["CODEX_LOCAL", "WORK_HOST"]],
+    NEXT_PROMPT: [["WORK_LOCAL", "CODEX_LOCAL"], ["WORK_HOST", "CODEX_LOCAL"]],
     USER_DECISION_REQUIRED: [
       ["WORK_LOCAL", "USER"],
     ],

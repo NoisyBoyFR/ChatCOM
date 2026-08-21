@@ -7,6 +7,8 @@ import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import {
   CHATCOM_MCP_INSTRUCTIONS,
   CHATCOM_MCP_VERSION,
+  CHATCOM_WORK_COMPLETE_TOOL,
+  CHATCOM_WORK_OPEN_TOOL,
   CHATCOM_RELAY_TOOL,
   CHATCOM_VALIDATE_TOOL,
   createChatComMcpServer,
@@ -15,6 +17,7 @@ import {
 import { createMessageForTests, RelayFailure } from "../local-relay.js";
 import { RelayConfigError, type PortableRelayConfig } from "../relay-config.js";
 import type { MessageEnvelope } from "../message-contract.js";
+import type { WorkHostBridge } from "../work-host-bridge.js";
 
 const sessionId = "11111111-1111-4111-8111-111111111111";
 
@@ -61,15 +64,45 @@ test("advertises focused tools with accurate safety annotations and server-wide 
   const { server, client } = await connectedClient(dependencies);
   try {
     const listed = await client.listTools();
-    assert.deepEqual(listed.tools.map(({ name }) => name), [CHATCOM_VALIDATE_TOOL, CHATCOM_RELAY_TOOL]);
-    assert.equal(listed.tools[0]?.annotations?.readOnlyHint, true);
-    assert.equal(listed.tools[0]?.annotations?.openWorldHint, false);
-    assert.equal(listed.tools[1]?.annotations?.readOnlyHint, false);
-    assert.equal(listed.tools[1]?.annotations?.openWorldHint, true);
+    assert.deepEqual(listed.tools.map(({ name }) => name), [CHATCOM_WORK_OPEN_TOOL, CHATCOM_WORK_COMPLETE_TOOL, CHATCOM_VALIDATE_TOOL, CHATCOM_RELAY_TOOL]);
+    const validation = listed.tools.find(({ name }) => name === CHATCOM_VALIDATE_TOOL);
+    const legacy = listed.tools.find(({ name }) => name === CHATCOM_RELAY_TOOL);
+    assert.equal(validation?.annotations?.readOnlyHint, true);
+    assert.equal(validation?.annotations?.openWorldHint, false);
+    assert.equal(legacy?.annotations?.readOnlyHint, false);
+    assert.equal(legacy?.annotations?.openWorldHint, true);
     assert.equal(listed.tools.every((tool) => tool.annotations?.destructiveHint === false), true);
     assert.equal(client.getInstructions(), CHATCOM_MCP_INSTRUCTIONS);
     assert.equal(client.getServerVersion()?.version, CHATCOM_MCP_VERSION);
     assert.match(client.getInstructions() ?? "", /explicit user authorization/u);
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
+test("exposes the two-call WORK_HOST protocol with bounded diagnostics", async () => {
+  const hostSession = "11111111-1111-4111-8111-111111111111";
+  const report = createMessageForTests({ session_id: hostSession, message_id: "33333333-3333-4333-8333-333333333333", correlation_id: "22222222-2222-4222-8222-222222222222", sequence: 2, sender: "CODEX_LOCAL", recipient: "WORK_HOST", type: "REPORT", phase: "MCP-TEST", point: "BRIDGE", content: "LEAK_SENTINEL_REPORT", user_action_needed: false });
+  const nextPrompt = createMessageForTests({ session_id: hostSession, message_id: "44444444-4444-4444-8444-444444444444", correlation_id: report.message_id, sequence: 3, sender: "WORK_HOST", recipient: "CODEX_LOCAL", type: "NEXT_PROMPT", phase: "MCP-TEST", point: "BRIDGE", content: "LEAK_SENTINEL_NEXT_PROMPT", user_action_needed: false });
+  let opened = false;
+  const bridge = {
+    open: async () => { opened = true; return { status: "REPORT_READY", communicationMode: "REAL_WORK_HOST", workHost: "MCP_HOST", workAuthentication: "WORK_AUTH_MANAGED_BY_HOST", codexAuthentication: "CODEX_AUTH_READY", security: "READ_ONLY", sessionId: hostSession, report, transmissions: 2, completedTransmissions: 2, cleanup: "PENDING", stoppedBeforeSecondCodexMission: true } as const; },
+    complete: async () => { assert.equal(opened, true); return { status: "SUCCESS", communicationMode: "REAL_WORK_HOST", workHost: "MCP_HOST", workAuthentication: "WORK_AUTH_MANAGED_BY_HOST", codexAuthentication: "CODEX_AUTH_READY", security: "READ_ONLY", sessionId: hostSession, transmissions: 3, completedTransmissions: 3, cleanup: "CONFIRMED", stoppedBeforeSecondCodexMission: true } as const; },
+  } as unknown as WorkHostBridge;
+  const dependencies: ChatComMcpDependencies = { loadConfig: async () => config(), runRelay: async () => { throw new Error("must-not-run"); }, workHostBridge: bridge };
+  const { server, client } = await connectedClient(dependencies);
+  try {
+    const mission = createMessageForTests({ session_id: hostSession, message_id: "22222222-2222-4222-8222-222222222222", correlation_id: hostSession, sequence: 1, sender: "WORK_HOST", recipient: "CODEX_LOCAL", type: "MISSION", phase: "MCP-TEST", point: "BRIDGE", content: "LEAK_SENTINEL_MISSION", user_action_needed: false });
+    const openedResult = await client.callTool({ name: CHATCOM_WORK_OPEN_TOOL, arguments: { config_path: "relay.json", mission } });
+    assert.equal(openedResult.isError, undefined);
+    assert.equal((openedResult.structuredContent as { communication_mode: string; cleanup: string }).communication_mode, "REAL_WORK_HOST");
+    assert.equal(textContent(openedResult), "CHATCOM_WORK_HOST kind=REPORT_READY transmissions=2 cleanup=PENDING mode=REAL_WORK_HOST");
+    assert.equal(JSON.stringify(openedResult).includes("LEAK_SENTINEL_REPORT"), true, "the validated REPORT is returned to the host in structured content");
+    const completed = await client.callTool({ name: CHATCOM_WORK_COMPLETE_TOOL, arguments: { session_id: hostSession, next_prompt: nextPrompt } });
+    assert.equal(completed.isError, undefined);
+    assert.equal((completed.structuredContent as { transmissions: number; cleanup: string }).transmissions, 3);
+    assert.equal(textContent(completed), "CHATCOM_WORK_HOST kind=SUCCESS transmissions=3 cleanup=CONFIRMED mode=REAL_WORK_HOST");
   } finally {
     await client.close();
     await server.close();

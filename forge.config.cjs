@@ -44,7 +44,7 @@ module.exports = {
       name: "@electron-forge/maker-squirrel",
       config: {
         name: "chatcom",
-        setupExe: "ChatCOM-Desktop-1.0.0-rc.4-Setup.exe",
+        setupExe: "ChatCOM-Desktop-1.0.0-rc.5-Setup.exe",
         noMsi: true,
       },
     },

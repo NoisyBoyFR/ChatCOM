@@ -5,9 +5,10 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import * as z from "zod/v4";
 import { RelayFailure } from "./local-relay.js";
-import { MAX_CONTENT_BYTES, MAX_ROUTE_BYTES, DELIVERY_STATUSES, MESSAGE_DATE_PATTERN, MESSAGE_ROLES, MESSAGE_TYPES, MESSAGE_UUID_PATTERN, validateRelayMessages } from "./message-contract.js";
+import { MAX_CONTENT_BYTES, MAX_ROUTE_BYTES, DELIVERY_STATUSES, MESSAGE_DATE_PATTERN, MESSAGE_ROLES, MESSAGE_TYPES, MESSAGE_UUID_PATTERN, validateRelayMessages, type MessageEnvelope } from "./message-contract.js";
 import { loadRelayConfig, RelayConfigError, type PortableRelayConfig } from "./relay-config.js";
 import { runPortableRelay, type PortableRelayRunResult } from "./portable-relay.js";
+import { WorkHostBridge, type WorkHostOpenResult, type WorkHostCompleteResult } from "./work-host-bridge.js";
 
 const packageRequire = createRequire(import.meta.url);
 const packageMetadata = packageRequire("../package.json") as { version?: unknown };
@@ -15,9 +16,11 @@ if (typeof packageMetadata.version !== "string" || packageMetadata.version.trim(
 export const CHATCOM_MCP_VERSION = packageMetadata.version;
 export const CHATCOM_VALIDATE_TOOL = "chatcom_validate_config" as const;
 export const CHATCOM_RELAY_TOOL = "chatcom_run_relay" as const;
+export const CHATCOM_WORK_OPEN_TOOL = "chatcom_work_open" as const;
+export const CHATCOM_WORK_COMPLETE_TOOL = "chatcom_work_complete" as const;
 
 export const CHATCOM_MCP_INSTRUCTIONS =
-  "ChatCOM is a local read-only Work-to-Codex relay. Call chatcom_validate_config before chatcom_run_relay. Run the relay only with explicit user authorization. Never copy raw message content into terminal diagnostics. The relay performs exactly three transmissions, stops before a second Codex mission, and fails closed when cleanup is not confirmed.";
+  "ChatCOM is a local read-only Work-to-Codex relay. Call chatcom_validate_config before a relay. Run the legacy relay only with explicit user authorization. For a real host exchange, call chatcom_work_open with a validated WORK_HOST MISSION, let the MCP host analyze the returned REPORT, then call chatcom_work_complete with exactly one WORK_HOST NEXT_PROMPT. WORK authentication is managed by the host; ChatCOM never reads host credentials. The real-host exchange performs exactly three transmissions, never runs a second Codex mission, and fails closed when cleanup is not confirmed. The legacy chatcom_run_relay tool is LOCAL_SIMULATION only.";
 
 const configPathSchema = z.string().trim().min(1).max(4_096).describe("Path to a ChatCOM relay configuration file.");
 const uuidSchema = z.string().regex(MESSAGE_UUID_PATTERN);
@@ -65,12 +68,75 @@ const relayOutputSchema = {
 export interface ChatComMcpDependencies {
   loadConfig(path: string): Promise<PortableRelayConfig>;
   runRelay(config: PortableRelayConfig, timeoutMs: number, signal?: AbortSignal): Promise<PortableRelayRunResult>;
+  workHostBridge?: WorkHostBridge;
 }
 
 const DEFAULT_DEPENDENCIES: ChatComMcpDependencies = {
   loadConfig: loadRelayConfig,
   runRelay: (config, timeoutMs, signal) => runPortableRelay(config, { timeoutMs, signal }),
 };
+
+const workHostOpenOutputSchema = {
+  status: z.literal("REPORT_READY"),
+  communication_mode: z.literal("REAL_WORK_HOST"),
+  work_host: z.literal("MCP_HOST"),
+  work_authentication: z.literal("WORK_AUTH_MANAGED_BY_HOST"),
+  codex_authentication: z.literal("CODEX_AUTH_READY"),
+  security: z.literal("READ_ONLY"),
+  session_id: uuidSchema,
+  report: messageSchema,
+  transmissions: z.literal(2),
+  completed_transmissions: z.literal(2),
+  cleanup: z.literal("PENDING"),
+  stopped_before_second_codex_mission: z.literal(true),
+};
+
+const workHostCompleteOutputSchema = {
+  status: z.literal("SUCCESS"),
+  communication_mode: z.literal("REAL_WORK_HOST"),
+  work_host: z.literal("MCP_HOST"),
+  work_authentication: z.literal("WORK_AUTH_MANAGED_BY_HOST"),
+  codex_authentication: z.literal("CODEX_AUTH_READY"),
+  security: z.literal("READ_ONLY"),
+  session_id: uuidSchema,
+  transmissions: z.literal(3),
+  completed_transmissions: z.literal(3),
+  cleanup: z.literal("CONFIRMED"),
+  stopped_before_second_codex_mission: z.literal(true),
+};
+
+function openStructured(result: WorkHostOpenResult) {
+  return {
+    status: result.status,
+    communication_mode: result.communicationMode,
+    work_host: result.workHost,
+    work_authentication: result.workAuthentication,
+    codex_authentication: result.codexAuthentication,
+    security: result.security,
+    session_id: result.sessionId,
+    report: result.report,
+    transmissions: result.transmissions,
+    completed_transmissions: result.completedTransmissions,
+    cleanup: result.cleanup,
+    stopped_before_second_codex_mission: result.stoppedBeforeSecondCodexMission,
+  };
+}
+
+function completeStructured(result: WorkHostCompleteResult) {
+  return {
+    status: result.status,
+    communication_mode: result.communicationMode,
+    work_host: result.workHost,
+    work_authentication: result.workAuthentication,
+    codex_authentication: result.codexAuthentication,
+    security: result.security,
+    session_id: result.sessionId,
+    transmissions: result.transmissions,
+    completed_transmissions: result.completedTransmissions,
+    cleanup: result.cleanup,
+    stopped_before_second_codex_mission: result.stoppedBeforeSecondCodexMission,
+  };
+}
 
 function safeErrorCode(error: unknown): string {
   const candidate = error instanceof RelayConfigError || error instanceof RelayFailure ? error.code : "MCP_INTERNAL_ERROR";
@@ -102,9 +168,53 @@ function toolFailure(error: unknown) {
 }
 
 export function createChatComMcpServer(dependencies: ChatComMcpDependencies = DEFAULT_DEPENDENCIES): McpServer {
+  const workHostBridge = dependencies.workHostBridge ?? new WorkHostBridge();
   const server = new McpServer(
     { name: "chatcom", version: CHATCOM_MCP_VERSION },
     { instructions: CHATCOM_MCP_INSTRUCTIONS },
+  );
+
+  server.registerTool(
+    CHATCOM_WORK_OPEN_TOOL,
+    {
+      title: "Open a real WORK host exchange",
+      description: "Accept one validated MISSION from the MCP host, obtain one read-only Codex REPORT, and pause before the WORK host sends NEXT_PROMPT. WORK authentication is managed by the host; ChatCOM does not inspect or receive its secret.",
+      inputSchema: {
+        config_path: configPathSchema,
+        mission: messageSchema,
+        timeout_ms: z.number().int().positive().max(3_600_000).optional(),
+        idle_timeout_ms: z.number().int().positive().max(3_600_000).optional(),
+      },
+      outputSchema: workHostOpenOutputSchema,
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
+    },
+    async ({ config_path, mission, timeout_ms, idle_timeout_ms }, extra) => {
+      try {
+        const config = await dependencies.loadConfig(resolve(config_path));
+        const result = await workHostBridge.open(config, mission as MessageEnvelope, timeout_ms, idle_timeout_ms, extra.signal);
+        return { structuredContent: openStructured(result), content: [{ type: "text" as const, text: "CHATCOM_WORK_HOST kind=REPORT_READY transmissions=2 cleanup=PENDING mode=REAL_WORK_HOST" }] };
+      } catch (error) { return toolFailure(error); }
+    },
+  );
+
+  server.registerTool(
+    CHATCOM_WORK_COMPLETE_TOOL,
+    {
+      title: "Complete a real WORK host exchange",
+      description: "Accept exactly one validated NEXT_PROMPT from the same MCP host exchange, delete the single Codex thread, close the client, and confirm cleanup without running a second Codex mission.",
+      inputSchema: {
+        session_id: uuidSchema,
+        next_prompt: messageSchema,
+      },
+      outputSchema: workHostCompleteOutputSchema,
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
+    },
+    async ({ session_id, next_prompt }, extra) => {
+      try {
+        const result = await workHostBridge.complete(session_id, next_prompt as MessageEnvelope, extra.signal);
+        return { structuredContent: completeStructured(result), content: [{ type: "text" as const, text: "CHATCOM_WORK_HOST kind=SUCCESS transmissions=3 cleanup=CONFIRMED mode=REAL_WORK_HOST" }] };
+      } catch (error) { return toolFailure(error); }
+    },
   );
 
   server.registerTool(

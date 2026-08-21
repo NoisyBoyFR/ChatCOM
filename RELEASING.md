@@ -4,6 +4,22 @@ This procedure describes a formal release. It does not grant authority to run
 any step. Tags, GitHub Releases, and npm publication each require explicit user
 authorization.
 
+## RC.5 WORK host bridge
+
+RC.5 adds a real-host protocol without claiming that the local Codex process is
+WORK. The genuine MCP host must call `chatcom_work_open` with a validated
+`WORK_HOST` `MISSION`, receive and analyze the `REPORT`, then call
+`chatcom_work_complete` with exactly one `WORK_HOST` `NEXT_PROMPT`. The bridge
+creates one read-only Codex thread, runs one Codex mission, keeps only bounded
+session metadata in memory, and deletes the thread when the exchange completes
+or expires. `chatcom_run_relay` remains `LOCAL_SIMULATION`.
+
+Use [WORK-HOST-PROOF.md](WORK-HOST-PROOF.md) for the exact host-side test. A
+Codex session must never call the tools as a substitute WORK host. The only
+valid real-proof verdict is `SUCCESS_REAL_WORK_PROOF` after exactly three
+transmissions and `cleanup=CONFIRMED`; otherwise report `READY_FOR_WORK_PROOF`
+or a bounded failure.
+
 ## Desktop candidate
 
 For `1.0.0-rc.3`, the Windows desktop artifact is a validation artifact, not a

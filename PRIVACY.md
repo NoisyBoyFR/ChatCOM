@@ -6,6 +6,12 @@ ChatCOM is a local, read-only relay and desktop client. It has no telemetry,
 advertising identifier, analytics SDK, or ChatCOM account. Mission text,
 message content, and credentials are not written to ChatCOM preference files.
 
+For the `WORK_HOST` MCP bridge, WORK authentication remains in the OpenAI host
+application. ChatCOM receives the MCP request but never reads or stores host
+cookies, session tokens, API keys, browser profiles, or other authentication
+secrets. Exchange route metadata is held in memory only until the second tool
+call or bounded expiration; the Codex thread is deleted during cleanup.
+
 ## Data stored locally
 
 Electron stores versioned preferences in its normal per-user `userData`

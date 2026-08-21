@@ -111,7 +111,8 @@ const french = {
 } as const;
 
 type DictionaryKey = keyof typeof french;
-export type I18nKey = DictionaryKey | "settingsSave" | "settingsCancel" | "settingsSaveFailed" | "autoUpdate" | "updateChannel" | "updateStable" | "updatePreview" | "updateStatus" | "checkUpdates" | "restartUpdate";
+type BridgeKey = "communicationStatus" | "workConnection" | "mcpConnection" | "codexLocal" | "communicationMode" | "realWorkHost" | "localSimulation" | "bridgeCleanup" | "workAuthManaged" | "mcpConnected" | "mcpNotConnected" | "codexReady" | "codexAuthRequired" | "codexError";
+export type I18nKey = DictionaryKey | BridgeKey | "settingsSave" | "settingsCancel" | "settingsSaveFailed" | "autoUpdate" | "updateChannel" | "updateStable" | "updatePreview" | "updateStatus" | "checkUpdates" | "restartUpdate";
 type Dictionary = Record<DictionaryKey, string>;
 
 const english: Dictionary = {
@@ -148,6 +149,13 @@ const updateTranslations: Record<Locale, Record<"autoUpdate" | "updateChannel" |
   "ru-RU": { autoUpdate: "\u0410\u0432\u0442\u043e\u043c\u0430\u0442\u0438\u0447\u0435\u0441\u043a\u0438\u0435 \u043e\u0431\u043d\u043e\u0432\u043b\u0435\u043d\u0438\u044f", updateChannel: "\u041a\u0430\u043d\u0430\u043b \u043e\u0431\u043d\u043e\u0432\u043b\u0435\u043d\u0438\u0439", updateStable: "\u0421\u0442\u0430\u0431\u0438\u043b\u044c\u043d\u0430\u044f", updatePreview: "\u041f\u0440\u0435\u0434\u0432\u0430\u0440\u0438\u0442\u0435\u043b\u044c\u043d\u0430\u044f", updateStatus: "\u0421\u043e\u0441\u0442\u043e\u044f\u043d\u0438\u0435 \u043e\u0431\u043d\u043e\u0432\u043b\u0435\u043d\u0438\u0439", checkUpdates: "\u041f\u0440\u043e\u0432\u0435\u0440\u0438\u0442\u044c \u0441\u0435\u0439\u0447\u0430\u0441", restartUpdate: "\u041f\u0435\u0440\u0435\u0437\u0430\u043f\u0443\u0441\u0442\u0438\u0442\u044c \u0438 \u0443\u0441\u0442\u0430\u043d\u043e\u0432\u0438\u0442\u044c" },
 };
 
+const bridgeTranslations: Record<Locale, Record<BridgeKey, string>> = {
+  "fr-FR": { communicationStatus: "Communication", workConnection: "WORK", mcpConnection: "ChatCOM MCP", codexLocal: "Codex local", communicationMode: "Mode de communication", realWorkHost: "REAL_WORK_HOST", localSimulation: "LOCAL_SIMULATION", bridgeCleanup: "Nettoyage", workAuthManaged: "Connexion gérée par l’application OpenAI", mcpConnected: "CONNECTED", mcpNotConnected: "NOT_CONNECTED", codexReady: "READY", codexAuthRequired: "AUTH_REQUIRED", codexError: "ERROR" },
+  "en-US": { communicationStatus: "Communication", workConnection: "WORK", mcpConnection: "ChatCOM MCP", codexLocal: "Local Codex", communicationMode: "Communication mode", realWorkHost: "REAL_WORK_HOST", localSimulation: "LOCAL_SIMULATION", bridgeCleanup: "Cleanup", workAuthManaged: "Connection managed by the OpenAI application", mcpConnected: "CONNECTED", mcpNotConnected: "NOT_CONNECTED", codexReady: "READY", codexAuthRequired: "AUTH_REQUIRED", codexError: "ERROR" },
+  "zh-CN": { communicationStatus: "通信", workConnection: "WORK", mcpConnection: "ChatCOM MCP", codexLocal: "本地 Codex", communicationMode: "通信模式", realWorkHost: "REAL_WORK_HOST", localSimulation: "LOCAL_SIMULATION", bridgeCleanup: "清理", workAuthManaged: "连接由 OpenAI 应用管理", mcpConnected: "CONNECTED", mcpNotConnected: "NOT_CONNECTED", codexReady: "READY", codexAuthRequired: "AUTH_REQUIRED", codexError: "ERROR" },
+  "ru-RU": { communicationStatus: "Связь", workConnection: "WORK", mcpConnection: "ChatCOM MCP", codexLocal: "Локальный Codex", communicationMode: "Режим связи", realWorkHost: "REAL_WORK_HOST", localSimulation: "LOCAL_SIMULATION", bridgeCleanup: "Очистка", workAuthManaged: "Подключение управляется приложением OpenAI", mcpConnected: "CONNECTED", mcpNotConnected: "NOT_CONNECTED", codexReady: "READY", codexAuthRequired: "AUTH_REQUIRED", codexError: "ERROR" },
+};
+
 export function isSupportedLocale(value: unknown): value is Locale { return typeof value === "string" && (SUPPORTED_LOCALES as readonly string[]).includes(value); }
 export function normalizeLocale(value: unknown): Locale | undefined {
   if (isSupportedLocale(value)) return value;
@@ -158,7 +166,9 @@ export function normalizeLocale(value: unknown): Locale | undefined {
 export function detectLocale(value: string | undefined): Locale { return normalizeLocale(value) ?? "fr-FR"; }
 export function dictionary(locale: Locale): Dictionary { return DICTIONARIES[locale]; }
 export function translate(locale: Locale, key: I18nKey, params: Record<string, string | number> = {}): string {
-  const value = key in settingsTranslations[locale]
+  const value = key in bridgeTranslations[locale]
+    ? bridgeTranslations[locale][key as BridgeKey]
+    : key in settingsTranslations[locale]
     ? settingsTranslations[locale][key as "settingsSave" | "settingsCancel" | "settingsSaveFailed"]
     : key in updateTranslations[locale]
       ? updateTranslations[locale][key as "autoUpdate" | "updateChannel" | "updateStable" | "updatePreview" | "updateStatus" | "checkUpdates" | "restartUpdate"]

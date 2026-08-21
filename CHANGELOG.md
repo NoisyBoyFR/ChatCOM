@@ -4,6 +4,10 @@ All notable ChatCOM changes are recorded in this file. Dates use the ISO `YYYY-M
 
 ## [Unreleased]
 
+- RC.5: added the two-call `WORK_HOST` MCP bridge (`chatcom_work_open` and `chatcom_work_complete`) with one Codex thread, in-memory exchange state, route/replay protection, inactivity cleanup, and bounded host/authentication labels.
+- RC.5: kept `chatcom_run_relay` explicitly classified as `LOCAL_SIMULATION`; no synthetic local relay is eligible for a real WORK proof.
+- RC.5: added Desktop communication status for WORK host, MCP, local Codex, mode, cleanup, and timeline role coloring.
+- RC.5: updated the deterministic bridge tests and the four-language user and security documentation.
 - Added a main-process Electron/Squirrel updater controller with a ten-second first-run delay, six-hour checks, serialized requests, background download, deferred restart, and relay-cleanup gating.
 - Added typed settings for automatic updates and Stable/Preview channels in all four locales.
 - Added closed-by-default policy checks for packaging, Windows x64, publisher, timestamped Authenticode signatures, repository, version, and downgrade protection.

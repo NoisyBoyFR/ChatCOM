@@ -1,117 +1,107 @@
 # ChatCOM
 
-ChatCOM is a reusable local relay for structured communication between a Work review role and a Codex technical role.
+> A supervised, read-only communication bridge between a local WORK review role and Codex.
 
-[Version française](README.fr.md)
+[![CI](https://github.com/NoisyBoyFR/ChatCOM/actions/workflows/ci.yml/badge.svg)](https://github.com/NoisyBoyFR/ChatCOM/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/NoisyBoyFR/ChatCOM?include_prereleases&label=release)](https://github.com/NoisyBoyFR/ChatCOM/releases/tag/v1.0.0-rc.3)
+[![Windows](https://img.shields.io/badge/Windows-x64-0078D4?logo=windows11)](https://github.com/NoisyBoyFR/ChatCOM/releases/tag/v1.0.0-rc.3)
+[![TypeScript](https://img.shields.io/badge/TypeScript-7-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 
-## Current status
+**English** · [Français](README.fr.md) · [Changelog](CHANGELOG.md)
 
-The reusable core has been separated from FitMyLife into its own project. Its configuration, message contract, routing, cleanup, bounded diagnostics, Codex SDK adapter, App Server fallback, and synthetic tests are available.
+[![Download ChatCOM Desktop](https://img.shields.io/badge/Download-ChatCOM_Desktop_for_Windows-0078D4?style=for-the-badge&logo=windows11&logoColor=white)](https://github.com/NoisyBoyFR/ChatCOM/releases/download/v1.0.0-rc.3/ChatCOM-Desktop-1.0.0-rc.3-Setup.exe)
 
-ChatCOM `1.0.0-rc.3` is the release candidate for the bounded local relay. It
-adds a strict shared TypeScript/MCP message contract, propagated and bounded
-host cancellation, validated relay-session coherence, and a multi-platform CI
-matrix to the v0.3.0 STDIO MCP bridge.
+**Current candidate:** `1.0.0-rc.3` · Windows x64 · unsigned pre-release
 
-The candidate completed a real authenticated MCP STDIO → ChatCOM → Codex → Work
-relay with exactly three transmissions and confirmed cleanup. The bounded proof
-and earlier runtime evidence are recorded in [`.ai/PROOF.md`](.ai/PROOF.md).
+## What is ChatCOM?
 
-The candidate passes 83 deterministic tests, build, typecheck, configuration
-validation, package dry-run, and a production dependency audit. CI validates
-the same gate on Ubuntu, Windows, and macOS.
+ChatCOM coordinates a bounded exchange between two local roles:
 
-## ChatCOM Desktop 1.0.0-rc.3
-
-The Windows desktop candidate is a local supervised GUI for the `WORK_LOCAL`
-to `CODEX_LOCAL` read-only workflow. It guides project selection and the phase,
-point, mission, and cycle limit, then displays the bounded timeline
-`MISSION -> REPORT -> NEXT_PROMPT` for each cycle. Pause, resume, stop, bounded
-diagnostics, and JSON report export are available from the window.
-
-The unsigned `ChatCOM Setup.exe` is produced by the Windows CI artifact. It
-does not require administrator rights, change PATH, or add MCP configuration to
-Codex. Preferences are stored only in Electron user data; reset them from the
-GUI or uninstall the application through Windows. The supervised project is
-never written by the desktop relay, and the renderer cannot run arbitrary
-commands. A real Codex proof is not implied by the installer or by synthetic
-tests.
-
-Developer commands:
-
-```powershell
-npm run desktop:dev
-npm run desktop:typecheck
-npm run desktop:make
+```text
+WORK_LOCAL ── MISSION ──▶ CODEX_LOCAL
+WORK_LOCAL ◀── REPORT ─── CODEX_LOCAL
+WORK_LOCAL ─ NEXT_PROMPT ▶ CODEX_LOCAL
 ```
 
-`desktop:make` creates the Windows Squirrel installer in `out-desktop`. The
-bundled native Codex runtime is included in the Windows package; an authenticated
-Codex account is still required to run a relay. The CLI and MCP bridge remain
-available separately for hosts that do not use the desktop GUI.
+The user selects a project and mission, watches the exchange, and keeps final authority. Each relay is read-only, contains exactly three validated transmissions, stops before a second Codex mission, and requires confirmed cleanup.
 
-## Safety model
+`WORK_LOCAL` is an internal review role. It is not a remote ChatGPT Work session and ChatCOM does not impersonate the user.
 
-- project execution is read-only;
-- approvals are disabled;
-- the relay stops after three transmissions, before a second Codex mission;
-- project, phase, point, mission, and role instructions are configuration values;
-- user authority is never inferred;
-- terminal diagnostics are bounded and exclude prompts, responses, credentials, server messages, and stacks.
+## Desktop highlights
 
-The TypeScript API returns the three validated message envelopes to its caller.
-The CLI intentionally prints status metadata only.
+- guided project, phase, point, mission, timeout, and cycle configuration;
+- visual WORK ↔ Codex timeline with pause, resume, stop, and decision states;
+- French, English, Simplified Chinese, and Russian offline translations;
+- System, Light, and Dark themes;
+- normal, maximized, and fullscreen modes (`F11` / `Escape`);
+- text-size, reduced-motion, and timeline auto-scroll preferences;
+- no-model preflight for the runtime, authentication, project, and read-only policy;
+- versioned, validated preferences that never store mission or message content;
+- bounded diagnostics without prompts, responses, credentials, thread IDs, or stacks.
 
-The MCP bridge returns full envelopes as structured tool content. Its ordinary
-text result remains bounded. `chatcom_run_relay` is annotated as an external,
-non-idempotent action so the host can require explicit per-call approval even
-though the inspected project remains read-only.
+## Download and install on Windows
+
+1. Download **[ChatCOM-Desktop-1.0.0-rc.3-Setup.exe](https://github.com/NoisyBoyFR/ChatCOM/releases/download/v1.0.0-rc.3/ChatCOM-Desktop-1.0.0-rc.3-Setup.exe)**.
+2. Optionally download [SHA256SUMS.txt](https://github.com/NoisyBoyFR/ChatCOM/releases/download/v1.0.0-rc.3/SHA256SUMS.txt) and verify the installer.
+3. Run the installer for the current Windows user.
+4. Start **ChatCOM Desktop**, select a trusted local Git project, then complete the guided configuration.
+
+The installer requires no administrator rights, does not change `PATH`, does not configure MCP, and does not start Codex or a relay automatically. It is currently **unsigned**; verify its checksum and continue only if you trust this repository and release.
+
+The complete machine-readable build information is available in [desktop-build-manifest.json](https://github.com/NoisyBoyFR/ChatCOM/releases/download/v1.0.0-rc.3/desktop-build-manifest.json).
 
 ## Requirements
 
-- Node.js 22 or later;
-- an authenticated Codex installation usable by the official Codex SDK;
-- a local Git project to review.
+- Windows 10 or Windows 11, x64, for ChatCOM Desktop;
+- an authenticated Codex account available to the bundled Codex runtime;
+- a trusted local Git project to inspect;
+- Node.js 22 or later only for CLI, MCP, or source development workflows.
 
-## Install
+## Safety model
 
-```powershell
-npm install
-npm run build
-```
+- inspected projects remain read-only;
+- Codex approvals are disabled inside the relay;
+- every envelope, route, identifier, date, enum, and UTF-8 limit is validated;
+- cleanup must be confirmed before another cycle may start;
+- product decisions and side effects return control to the user;
+- the Electron renderer is sandboxed with Node integration disabled;
+- IPC channels and senders are allowlisted and validated;
+- diagnostics expose bounded status metadata only.
 
-### Simple Windows installer
+The authenticated MCP relay has completed a real three-transmission proof with confirmed cleanup. The RC.3 Desktop interface, localization, settings, and installer are covered by 109 deterministic tests and multi-platform CI; a separate real GUI relay proof has not yet been claimed. See [`.ai/PROOF.md`](.ai/PROOF.md).
 
-From the repository root or a prepared archive (`dist` must already be built),
-install ChatCOM for the current user:
-
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\install-windows.ps1 -AddToUserPath
-```
-
-The installer uses `%LOCALAPPDATA%\ChatCOM`, requires no administrator
-privileges, does not run dependency npm scripts, and starts neither Codex nor
-the relay. An Internet connection may be required to fetch dependencies. The
-installation provides `chatcom` and `chatcom-mcp`, but does not automatically
-add MCP configuration to Codex. Open a new terminal after updating PATH, then
-validate the install:
+## Developer quick start
 
 ```powershell
-chatcom validate --config .\relay.config.example.json
+npm ci
+npm run verify
+npm run desktop:dev
 ```
 
-Preview the operation without changing anything with `-WhatIf`.
+Build the Windows installer:
 
-## Configure
+```powershell
+npm run desktop:make
+```
 
-Copy `relay.config.example.json` and set the project root and routing fields:
+The expected installer is:
+
+```text
+out-desktop/make/squirrel.windows/x64/ChatCOM-Desktop-1.0.0-rc.3-Setup.exe
+```
+
+`npm run verify` performs the build, core and Desktop typechecks, 109 deterministic tests, example configuration validation, production dependency audit, and npm package dry-run. Diagnostic commands may contact a real Codex runtime and require explicit authorization.
+
+## CLI configuration
+
+Copy `relay.config.example.json` and configure the project route:
 
 ```json
 {
   "version": "1.0",
   "project_root": ".",
-  "phase": "PHASE-1",
-  "point": "POINT-1",
+  "phase": "TESTS",
+  "point": "FINAL_REVIEW",
   "mission": "Review the current project state without changing files."
 }
 ```
@@ -122,117 +112,30 @@ Validate without starting Codex:
 node .\dist\portable-cli.js validate --config .\relay.config.example.json
 ```
 
-Run the relay only after validation and explicit authorization:
+Run only with explicit user authorization:
 
 ```powershell
 node .\dist\portable-cli.js run --config .\relay.config.example.json --timeout-ms 600000
 ```
 
-## TypeScript API
-
-```ts
-import { loadRelayConfig, runPortableRelay } from "chatcom";
-
-const config = await loadRelayConfig("./relay.config.json");
-const result = await runPortableRelay(config, { timeoutMs: 600_000 });
-
-const [mission, report, nextPrompt] = result.relay.messages;
-// Consume validated content programmatically; do not print it in bounded diagnostics.
-
-const cancellation = new AbortController();
-const cancellable = runPortableRelay(config, { signal: cancellation.signal });
-// Call cancellation.abort() from the host when the mission must stop.
-```
-
 ## MCP bridge
 
-Build ChatCOM, then copy [`.codex/config.toml.example`](.codex/config.toml.example)
-into a trusted Codex configuration and replace the path placeholders. Restart
-the Codex host after changing MCP configuration.
+ChatCOM exposes two STDIO MCP tools:
 
-The server exposes exactly two tools:
+- `chatcom_validate_config` validates configuration without starting Codex;
+- `chatcom_run_relay` runs one authorized, bounded relay.
 
-- `chatcom_validate_config`: validates configuration without starting Codex;
-- `chatcom_run_relay`: runs one authorized three-transmission relay and returns
-  `MISSION`, `REPORT`, and `NEXT_PROMPT` as structured content.
+Build ChatCOM, copy [`.codex/config.toml.example`](.codex/config.toml.example) into a trusted Codex configuration, replace the placeholders with absolute paths, and restart the MCP host. Keep the relay tool in prompt-approval mode.
 
-Keep `chatcom_run_relay` in `prompt` approval mode. MCP protocol output is the
-intended private Work-facing transport; it must not be copied into terminal
-diagnostics.
-If the MCP host cancels a request, the cancellation signal is propagated to the
-Codex stream and cleanup is still required before the call can complete.
+## Project resources
 
-Start the STDIO server directly when needed:
-
-```powershell
-npm run build
-npm run mcp
-```
-
-## Development
-
-```powershell
-npm run build
-npm run typecheck
-npm test
-npm run validate-config
-npm run audit
-npm run verify
-```
-
-`npm run verify` also runs the production dependency audit and package dry-run.
-The diagnostic commands can contact a real Codex runtime. They must not be executed as part of ordinary unit tests or without explicit authorization.
-
-`1.0.0-rc.3` is not a formal release. Creating a tag, GitHub Release, or npm
-publication requires separate explicit authorization. See
-[`RELEASING.md`](RELEASING.md) for the gated release procedure.
-
-## Desktop 1.0.0-rc.3
-
-The Desktop app provides static, offline translations for `fr-FR`, `en-US`,
-`zh-CN` (Simplified Chinese), and `ru-RU` (Russian). The first launch follows
-the Windows locale when supported; otherwise it uses French. The language can
-be changed immediately in Settings and is stored in the versioned Electron
-preferences file.
-
-Settings include System/Light/Dark themes, normal/maximized/fullscreen window
-mode, Small/Normal/Large text, reduced motion, automatic timeline scrolling,
-and safe reset. `F11` toggles fullscreen and `Escape` leaves it. Preferences
-contain no mission, message content, diagnostics, tokens, thread IDs, or user
-responses. RC.2 preferences are migrated and invalid values return to safe
-defaults.
-
-Every configuration field explains whether it is Required, Recommended, or
-Optional, gives a beginner-friendly explanation and example, and reports
-validation errors next to the field. Start remains disabled until the form and
-the read-only no-model preflight are valid.
-
-The Windows installer is `ChatCOM-Desktop-1.0.0-rc.3-Setup.exe`. It is an
-unsigned user install, does not modify PATH, does not configure MCP, and does
-not start a relay automatically. Download only the GitHub Actions artifact
-named `chatcom-desktop-1.0.0-rc.3-windows-x64`; it contains the installer,
-`SHA256SUMS.txt`, and `desktop-build-manifest.json`. This is a synthetic build
-and packaging result, not a real WORK ↔ Codex proof.
-
-### zh-CN user notes
-
-Select 简体中文 in Settings. Labels, beginner help, validation messages,
-preflight, timeline, decisions, reset and export feedback update immediately.
-The technical route names and safety code `READ_ONLY` remain unchanged.
-
-### ru-RU user notes
-
-Select Русский in Settings. The same guided fields, explanations, validation,
-preflight, timeline, decision, reset and export flows are available in Russian.
-The technical route names and safety code `READ_ONLY` remain unchanged.
-
-## Visual Studio Code workflow
-
-Use [`CODEX-CHATCOM-PROMPT.md`](CODEX-CHATCOM-PROMPT.md) as the single durable
-prompt for the Codex IDE extension. It drives one autonomous mission through
-inspection, implementation, verification, correction, closure, and one final
-report to Work.
+- [French homepage](README.fr.md)
+- [Changelog](CHANGELOG.md)
+- [Release procedure](RELEASING.md)
+- [Operational proof](.ai/PROOF.md)
+- [Durable Codex prompt](CODEX-CHATCOM-PROMPT.md)
+- [RC.3 pre-release](https://github.com/NoisyBoyFR/ChatCOM/releases/tag/v1.0.0-rc.3)
 
 ## Origin
 
-ChatCOM was extracted from the generic Work ↔ Codex relay developed inside FitMyLife. FitMyLife product code, PC compatibility rules, web UI, product phases, and historical workflow state are not part of this repository.
+ChatCOM was extracted from the generic WORK ↔ Codex relay developed inside FitMyLife. FitMyLife product code and workflow state are not part of this repository.

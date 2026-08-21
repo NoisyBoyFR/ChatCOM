@@ -1,122 +1,108 @@
 # ChatCOM
 
-ChatCOM est un relay local réutilisable pour une communication structurée entre un rôle de revue Work et un rôle technique Codex.
+> Un pont de communication supervisé et en lecture seule entre un rôle local de contrôle WORK et Codex.
 
-[English version](README.md)
+[![CI](https://github.com/NoisyBoyFR/ChatCOM/actions/workflows/ci.yml/badge.svg)](https://github.com/NoisyBoyFR/ChatCOM/actions/workflows/ci.yml)
+[![Version](https://img.shields.io/github/v/release/NoisyBoyFR/ChatCOM?include_prereleases&label=version)](https://github.com/NoisyBoyFR/ChatCOM/releases/tag/v1.0.0-rc.3)
+[![Windows](https://img.shields.io/badge/Windows-x64-0078D4?logo=windows11)](https://github.com/NoisyBoyFR/ChatCOM/releases/tag/v1.0.0-rc.3)
+[![TypeScript](https://img.shields.io/badge/TypeScript-7-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 
-## État actuel
+[English](README.md) · **Français** · [Historique des versions](CHANGELOG.md)
 
-Le noyau réutilisable a été séparé de FitMyLife dans un projet autonome. La configuration, le contrat de messages, le routage, le nettoyage, les diagnostics bornés, l’adaptateur Codex SDK, le fallback App Server et les tests synthétiques sont disponibles.
+[![Télécharger ChatCOM Desktop](https://img.shields.io/badge/Télécharger-ChatCOM_Desktop_pour_Windows-0078D4?style=for-the-badge&logo=windows11&logoColor=white)](https://github.com/NoisyBoyFR/ChatCOM/releases/download/v1.0.0-rc.3/ChatCOM-Desktop-1.0.0-rc.3-Setup.exe)
 
-ChatCOM `1.0.0-rc.3` est la candidate de publication du relay local borné. Elle
-ajoute au pont MCP STDIO v0.3.0 un contrat de messages TypeScript/MCP strict et
-partagé, une annulation hôte propagée et bornée, la cohérence validée des
-sessions du relay et une matrice CI multi-plateforme.
+**Version candidate actuelle :** `1.0.0-rc.3` · Windows x64 · préversion non signée
 
-La candidate a terminé un relay réel authentifié MCP STDIO → ChatCOM → Codex →
-Work avec exactement trois transmissions et un nettoyage confirmé. La preuve
-bornée et les preuves runtime antérieures sont consignées dans
-[`.ai/PROOF.md`](.ai/PROOF.md).
+## Qu’est-ce que ChatCOM ?
 
-La candidate réussit 83 tests déterministes, le build, le typecheck, la
-validation de configuration, le contrôle d’archive à blanc et l’audit des
-dépendances de production. La CI exécute le même garde-fou sur Ubuntu, Windows
-et macOS.
+ChatCOM organise un échange borné entre deux rôles locaux :
 
-## ChatCOM Desktop 1.0.0-rc.3
-
-La candidate Windows fournit une interface locale supervisee pour le workflow
-en lecture seule `WORK_LOCAL` vers `CODEX_LOCAL`. Elle guide le choix du projet,
-de la phase, du point, de la mission et de la limite de cycles, puis affiche la
-timeline bornee `MISSION -> REPORT -> NEXT_PROMPT` pour chaque cycle. Pause,
-reprise, arret, diagnostics bornes et export JSON sont disponibles dans la
-fenetre.
-
-Le `ChatCOM Setup.exe` non signe est produit par l artefact CI Windows. Il ne
-demande pas de droits administrateur, ne modifie pas le PATH et n ajoute pas la
-configuration MCP a Codex. Les preferences restent dans les donnees utilisateur
-Electron ; elles peuvent etre reinitialisees dans l interface ou supprimees
-avec la desinstallation Windows. Le projet supervise n est jamais modifie par
-le relay desktop et le renderer ne peut pas executer de commandes arbitraires.
-Une preuve Codex reelle n est pas implicite dans l installateur ni dans les tests
-synthetiques.
-
-Commandes de developpement :
-
-```powershell
-npm run desktop:dev
-npm run desktop:typecheck
-npm run desktop:make
+```text
+WORK_LOCAL ── MISSION ──▶ CODEX_LOCAL
+WORK_LOCAL ◀── REPORT ─── CODEX_LOCAL
+WORK_LOCAL ─ NEXT_PROMPT ▶ CODEX_LOCAL
 ```
 
-`desktop:make` cree l installateur Squirrel Windows dans `out-desktop`. Le
-runtime Codex natif est inclus dans le paquet Windows ; un compte Codex
-authentifie reste necessaire pour executer un relay. La CLI et le pont MCP
-restent disponibles separement.
+L’utilisateur choisit un projet et une mission, observe la conversation et conserve l’autorité finale. Chaque relais reste en lecture seule, contient exactement trois transmissions validées, s’arrête avant une seconde mission Codex et exige un nettoyage confirmé.
 
-## Modèle de sécurité
+`WORK_LOCAL` est un rôle interne de contrôle. Ce n’est pas une session ChatGPT Work distante et ChatCOM n’agit jamais à la place de l’utilisateur.
 
-- exécution du projet en lecture seule ;
-- approbations désactivées ;
-- arrêt après trois transmissions, avant une seconde mission Codex ;
-- projet, phase, point, mission et instructions de rôles configurables ;
-- aucune autorité utilisateur inventée ;
-- diagnostics terminaux bornés, sans prompt, réponse, credential, message serveur ni stack.
+## Points forts de l’interface Desktop
 
-L’API TypeScript restitue les trois enveloppes validées à son appelant. La CLI
-n’affiche volontairement que des métadonnées de statut.
+- configuration guidée du projet, de la phase, du point, de la mission, des délais et des cycles ;
+- chronologie visuelle WORK ↔ Codex avec pause, reprise, arrêt et demande de décision ;
+- traductions hors ligne en français, anglais, chinois simplifié et russe ;
+- thèmes Système, Clair et Sombre ;
+- modes fenêtre normale, maximisée et plein écran (`F11` / `Échap`) ;
+- taille du texte, réduction des animations et défilement automatique ;
+- pré-vérification sans modèle du runtime, de l’authentification, du projet et du mode lecture seule ;
+- préférences versionnées et validées, sans mission ni contenu de conversation ;
+- diagnostics bornés sans prompt, réponse, identifiant de thread, secret ni stack trace.
 
-Le pont MCP restitue les enveloppes complètes comme contenu structuré. Son texte
-ordinaire reste borné. `chatcom_run_relay` est déclaré comme action externe et
-non idempotente afin que l’hôte exige une approbation explicite à chaque appel,
-même si le dépôt inspecté reste en lecture seule.
+## Télécharger et installer sur Windows
+
+1. Téléchargez **[ChatCOM-Desktop-1.0.0-rc.3-Setup.exe](https://github.com/NoisyBoyFR/ChatCOM/releases/download/v1.0.0-rc.3/ChatCOM-Desktop-1.0.0-rc.3-Setup.exe)**.
+2. Vous pouvez aussi télécharger [SHA256SUMS.txt](https://github.com/NoisyBoyFR/ChatCOM/releases/download/v1.0.0-rc.3/SHA256SUMS.txt) pour vérifier l’installateur.
+3. Exécutez l’installateur pour l’utilisateur Windows actuel.
+4. Ouvrez **ChatCOM Desktop**, sélectionnez un projet Git local de confiance, puis suivez la configuration guidée.
+
+L’installateur ne demande pas de droits administrateur, ne modifie pas le `PATH`, ne configure pas MCP et ne démarre automatiquement ni Codex ni un relais. Il est actuellement **non signé** : vérifiez son empreinte et continuez uniquement si vous faites confiance à ce dépôt et à cette préversion.
+
+Les informations de build lisibles par machine se trouvent dans [desktop-build-manifest.json](https://github.com/NoisyBoyFR/ChatCOM/releases/download/v1.0.0-rc.3/desktop-build-manifest.json).
 
 ## Prérequis
 
-- Node.js 22 ou plus récent ;
-- une installation Codex authentifiée et utilisable par le SDK Codex officiel ;
-- un projet Git local à examiner.
+- Windows 10 ou Windows 11 x64 pour ChatCOM Desktop ;
+- un compte Codex authentifié accessible au runtime Codex inclus ;
+- un projet Git local de confiance à examiner ;
+- Node.js 22 ou plus récent uniquement pour la CLI, MCP ou le développement depuis les sources.
 
-## Installation
+## Modèle de sécurité
 
-```powershell
-npm install
-npm run build
-```
+- les projets examinés restent en lecture seule ;
+- les approbations Codex sont désactivées dans le relais ;
+- chaque enveloppe, route, identifiant, date, enum et limite UTF-8 est validé ;
+- le nettoyage doit être confirmé avant le cycle suivant ;
+- une décision produit ou un effet de bord rend le contrôle à l’utilisateur ;
+- le renderer Electron est isolé et ne possède pas d’accès Node ;
+- les canaux IPC et leurs émetteurs sont autorisés et validés explicitement ;
+- les diagnostics exposent uniquement des métadonnées bornées.
 
-### Installation Windows simple
+Le relais MCP authentifié a déjà réussi une preuve réelle de trois transmissions avec nettoyage confirmé. L’interface Desktop RC.3, ses traductions, ses paramètres et son installateur sont couverts par 109 tests déterministes et une CI multiplateforme ; aucune nouvelle preuve réelle du relais depuis la GUI n’est encore revendiquée. Consultez [`.ai/PROOF.md`](.ai/PROOF.md).
 
-Depuis la racine du dépôt ou d’une archive préparée (`dist` doit déjà être
-construit), installer ChatCOM pour l’utilisateur courant :
-
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\install-windows.ps1 -AddToUserPath
-```
-
-L’installateur utilise `%LOCALAPPDATA%\ChatCOM`, n’exige pas de privilèges
-administrateur, n’exécute pas les scripts npm des dépendances et n’active ni
-Codex ni le relais. Une connexion Internet peut être nécessaire pour récupérer
-les dépendances. L’installation fournit `chatcom` et `chatcom-mcp`, mais
-n’ajoute pas automatiquement la configuration MCP à Codex. Ouvrir un nouveau
-terminal après l’ajout au PATH, puis valider l’installation :
+## Démarrage rapide pour les développeurs
 
 ```powershell
-chatcom validate --config .\relay.config.example.json
+npm ci
+npm run verify
+npm run desktop:dev
 ```
 
-Un aperçu sans modification est disponible avec `-WhatIf`.
+Construire l’installateur Windows :
 
-## Configuration
+```powershell
+npm run desktop:make
+```
 
-Copier `relay.config.example.json` puis définir la racine du projet et le routage :
+Installateur attendu :
+
+```text
+out-desktop/make/squirrel.windows/x64/ChatCOM-Desktop-1.0.0-rc.3-Setup.exe
+```
+
+`npm run verify` exécute le build, les vérifications TypeScript du noyau et de Desktop, 109 tests déterministes, la validation de configuration, l’audit des dépendances de production et le contrôle du paquet npm. Les commandes de diagnostic peuvent contacter un runtime Codex réel et nécessitent une autorisation explicite.
+
+## Configuration de la CLI
+
+Copiez `relay.config.example.json`, puis configurez la route du projet :
 
 ```json
 {
   "version": "1.0",
   "project_root": ".",
-  "phase": "PHASE-1",
-  "point": "POINT-1",
-  "mission": "Examiner l’état courant du projet sans modifier les fichiers."
+  "phase": "TESTS",
+  "point": "REVUE_FINALE",
+  "mission": "Examiner l’état actuel du projet sans modifier les fichiers."
 }
 ```
 
@@ -126,105 +112,30 @@ Valider sans démarrer Codex :
 node .\dist\portable-cli.js validate --config .\relay.config.example.json
 ```
 
-Exécuter le relay uniquement après validation et autorisation explicite :
+Exécuter uniquement avec une autorisation utilisateur explicite :
 
 ```powershell
 node .\dist\portable-cli.js run --config .\relay.config.example.json --timeout-ms 600000
 ```
 
-## API TypeScript
-
-```ts
-import { loadRelayConfig, runPortableRelay } from "chatcom";
-
-const config = await loadRelayConfig("./relay.config.json");
-const result = await runPortableRelay(config, { timeoutMs: 600_000 });
-
-const [mission, report, nextPrompt] = result.relay.messages;
-const cancellation = new AbortController();
-const cancellable = runPortableRelay(config, { signal: cancellation.signal });
-// Appeler cancellation.abort() depuis l’hôte pour arrêter la mission.
-// Consommer les contenus validés par programme sans les imprimer dans les diagnostics bornés.
-```
-
 ## Pont MCP
 
-Si l’hôte MCP annule une requête, le signal d’annulation est propagé au flux
-Codex et le nettoyage doit rester confirmé avant la fin de l’appel.
-
-Compiler ChatCOM, puis copier
-[`.codex/config.toml.example`](.codex/config.toml.example) dans une configuration
-Codex approuvée et remplacer les chemins fictifs. Redémarrer l’hôte Codex après
-toute modification de la configuration MCP.
-
-Le serveur expose exactement deux outils :
+ChatCOM expose deux outils MCP STDIO :
 
 - `chatcom_validate_config` valide la configuration sans démarrer Codex ;
-- `chatcom_run_relay` exécute un relay autorisé à trois transmissions et
-  restitue `MISSION`, `REPORT` et `NEXT_PROMPT` sous forme structurée.
+- `chatcom_run_relay` exécute un relais borné après autorisation.
 
-Conserver `chatcom_run_relay` en mode d’approbation `prompt`. La sortie du
-protocole MCP est le transport privé destiné à Work ; elle ne doit pas être
-recopiée dans les diagnostics terminaux.
+Compilez ChatCOM, copiez [`.codex/config.toml.example`](.codex/config.toml.example) dans une configuration Codex de confiance, remplacez les chemins fictifs par des chemins absolus, puis redémarrez l’hôte MCP. Conservez le relais en mode d’approbation `prompt`.
 
-Pour démarrer directement le serveur STDIO :
+## Ressources du projet
 
-```powershell
-npm run build
-npm run mcp
-```
-
-## Développement
-
-```powershell
-npm run build
-npm run typecheck
-npm test
-npm run validate-config
-npm run audit
-npm run verify
-```
-
-Les commandes de diagnostic peuvent contacter un runtime Codex réel. Elles ne doivent pas être exécutées par les tests ordinaires ni sans autorisation explicite.
-
-`1.0.0-rc.3` n’est pas une publication formelle. La création d’un tag, d’une
-GitHub Release ou d’une publication npm exige une autorisation explicite séparée.
-La procédure contrôlée est décrite dans [`RELEASING.md`](RELEASING.md).
-
-## Desktop 1.0.0-rc.3
-
-Desktop fournit des traductions statiques et hors ligne pour `fr-FR`, `en-US`,
-`zh-CN` (chinois simplifié) et `ru-RU` (russe). Au premier démarrage, la
-langue Windows est utilisée lorsqu’elle est prise en charge ; sinon le français
-est utilisé. Le changement est immédiat dans Paramètres et est conservé dans
-les préférences Electron versionnées.
-
-Les paramètres proposent les thèmes Système/Clair/Sombre, les modes fenêtre
-normale/maximisée/plein écran, les tailles de texte Petite/Normale/Grande, la
-réduction des animations, le défilement automatique et une réinitialisation
-sûre. `F11` active ou désactive le plein écran et `Échap` en sort. Les
-préférences ne contiennent ni mission, contenu de message, diagnostic, token,
-identifiant de thread ni réponse utilisateur. Les préférences RC.2 sont
-migrées et les valeurs invalides reviennent à des valeurs sûres.
-
-Chaque champ indique Obligatoire, Recommandé ou Optionnel, fournit une aide
-pour débutant et affiche son erreur près du champ. Démarrer reste désactivé
-tant que le formulaire et le préflight lecture seule sans modèle ne sont pas
-valides.
-
-L’installateur Windows est `ChatCOM-Desktop-1.0.0-rc.3-Setup.exe`. Il est
-non signé, s’installe pour l’utilisateur, ne modifie pas PATH, ne configure pas
-MCP et ne démarre aucun relais. L’artefact GitHub Actions exact est
-`chatcom-desktop-1.0.0-rc.3-windows-x64` ; il contient l’installateur,
-`SHA256SUMS.txt` et `desktop-build-manifest.json`. Il s’agit d’un résultat de
-build et de tests synthétiques, pas d’une preuve réelle WORK ↔ Codex.
-
-## Workflow Visual Studio Code
-
-Utiliser [`CODEX-CHATCOM-PROMPT.md`](CODEX-CHATCOM-PROMPT.md) comme prompt
-unique durable pour l’extension Codex. Il conduit une mission autonome complète
-jusqu’à un seul compte rendu final destiné à Work.
+- [Page d’accueil anglaise](README.md)
+- [Historique des versions](CHANGELOG.md)
+- [Procédure de publication](RELEASING.md)
+- [Preuves opérationnelles](.ai/PROOF.md)
+- [Prompt Codex durable](CODEX-CHATCOM-PROMPT.md)
+- [Préversion RC.3](https://github.com/NoisyBoyFR/ChatCOM/releases/tag/v1.0.0-rc.3)
 
 ## Origine
 
-ChatCOM est extrait du relay générique Work ↔ Codex développé dans FitMyLife. Le code produit FitMyLife, les règles de compatibilité PC, l’interface web, les phases produit et l’historique de workflow FitMyLife ne font pas partie de ce dépôt.
+ChatCOM provient du relais générique WORK ↔ Codex développé dans FitMyLife. Le code produit et l’état de workflow de FitMyLife ne font pas partie de ce dépôt.

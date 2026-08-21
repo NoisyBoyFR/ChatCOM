@@ -21,6 +21,17 @@ the version, Windows platform, x64 architecture, installer filename, size,
 SHA-256, Codex runtime version, and `UNSIGNED` signature state. This artifact
 is not a real WORK ↔ Codex proof.
 
+The authorized public pre-release uses tag `v1.0.0-rc.3` and uploads those
+same three verified files. The permanent installer link used by both homepages
+is:
+
+```text
+https://github.com/NoisyBoyFR/ChatCOM/releases/download/v1.0.0-rc.3/ChatCOM-Desktop-1.0.0-rc.3-Setup.exe
+```
+
+The release must remain marked as a pre-release. It is not the stable `v1.0.0`
+release and does not authorize npm publication.
+
 ## Release gate
 
 1. Start from a clean `main` aligned with `origin/main`.

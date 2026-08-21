@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { createMessage, MAX_CONTENT_BYTES, MAX_ROUTE_BYTES, MESSAGE_DATE_PATTERN, MessageContractError, MessageLedger, MESSAGE_OUTPUT_SCHEMA, parseMessageText, validateMessage, validateRelayMessages, type MessageEnvelope } from "../message-contract.js";
+import { createMessage, createMessageOutputSchema, MAX_CONTENT_BYTES, MAX_ROUTE_BYTES, MESSAGE_DATE_PATTERN, MessageContractError, MessageLedger, MESSAGE_OUTPUT_SCHEMA, parseMessageText, validateMessage, validateRelayMessages, type MessageEnvelope } from "../message-contract.js";
 
 const UUIDS = [
   "11111111-1111-4111-8111-111111111111",
@@ -36,6 +36,33 @@ test("uses a singleton enum for the structured output version", () => {
   const versionSchema = MESSAGE_OUTPUT_SCHEMA.properties.version;
   assert.deepEqual(versionSchema.enum, ["1.0"]);
   assert.equal("const" in versionSchema, false);
+});
+
+test("creates exact route schemas with independent session and correlation constants", () => {
+  const schema = createMessageOutputSchema({
+    sessionId: UUIDS[0],
+    sequence: 2,
+    sender: "CODEX_LOCAL",
+    recipient: "WORK_LOCAL",
+    type: "REPORT",
+    correlationId: UUIDS[1],
+    phase: "PHASE-B",
+    point: "POINT-2",
+  });
+  const properties = schema.properties;
+  assert.equal(properties.version.const, "1.0");
+  assert.equal(properties.session_id.const, UUIDS[0]);
+  assert.equal(properties.sequence.const, 2);
+  assert.equal(properties.sender.const, "CODEX_LOCAL");
+  assert.equal(properties.recipient.const, "WORK_LOCAL");
+  assert.equal(properties.type.const, "REPORT");
+  assert.equal(properties.correlation_id.const, UUIDS[1]);
+  assert.equal(properties.phase.const, "PHASE-B");
+  assert.equal(properties.point.const, "POINT-2");
+  assert.equal(properties.delivery_status.const, "CREATED");
+  assert.equal(properties.user_action_needed.const, false);
+  assert.equal(properties.message_id.pattern, MESSAGE_OUTPUT_SCHEMA.properties.message_id.pattern);
+  assert.equal(schema.additionalProperties, false);
 });
 
 test("rejects unknown and missing keys", () => {

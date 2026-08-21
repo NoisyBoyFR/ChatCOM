@@ -19,13 +19,13 @@ function fixtureMessages(): [MessageEnvelope, MessageEnvelope, MessageEnvelope] 
 
 class FakeRelayAgent {
   readonly starts: string[] = [];
-  readonly turns: { threadId: string; prompt: string }[] = [];
+  readonly turns: { threadId: string; prompt: string; outputSchema?: unknown }[] = [];
   readonly signals: (AbortSignal | undefined)[] = [];
   readonly deletes: string[] = [];
   constructor(private readonly outputs: string[], private readonly failureOnCall?: number, private readonly cancelOnCall?: number) {}
   async startThread(instructions: string): Promise<string> { const id = instructions.includes("WORK_LOCAL") ? "work-thread" : "codex-thread"; this.starts.push(id); return id; }
-  async runTurn(threadId: string, prompt: string, signal?: AbortSignal): Promise<string> {
-    this.turns.push({ threadId, prompt });
+  async runTurn(threadId: string, prompt: string, outputSchema?: unknown, signal?: AbortSignal): Promise<string> {
+    this.turns.push({ threadId, prompt, outputSchema });
     this.signals.push(signal);
     if (this.cancelOnCall === this.turns.length) {
       await new Promise<void>((resolve) => signal?.addEventListener("abort", () => resolve(), { once: true }));
@@ -59,6 +59,25 @@ test("runs three automatic transmissions and stops before the second Codex missi
   assert.equal(result.messages[2].type, "NEXT_PROMPT");
   assert.deepEqual(agent.turns.map((turn) => turn.threadId), ["work-thread", "codex-thread", "work-thread"]);
   assert.deepEqual(agent.deletes, ["codex-thread", "work-thread"]);
+  const schemas = agent.turns.map(({ outputSchema }) => outputSchema as { properties: Record<string, { const?: unknown }> });
+  assert.equal(schemas.length, 3);
+  assert.equal(schemas[0].properties.version.const, "1.0");
+  assert.equal(schemas[0].properties.session_id.const, sessionId);
+  assert.equal(schemas[0].properties.sequence.const, 1);
+  assert.equal(schemas[0].properties.sender.const, "WORK_LOCAL");
+  assert.equal(schemas[0].properties.recipient.const, "CODEX_LOCAL");
+  assert.equal(schemas[0].properties.type.const, "MISSION");
+  assert.equal(schemas[0].properties.correlation_id.const, sessionId);
+  assert.equal(schemas[1].properties.sequence.const, 2);
+  assert.equal(schemas[1].properties.sender.const, "CODEX_LOCAL");
+  assert.equal(schemas[1].properties.recipient.const, "WORK_LOCAL");
+  assert.equal(schemas[1].properties.type.const, "REPORT");
+  assert.equal(schemas[1].properties.correlation_id.const, messages[0].message_id);
+  assert.equal(schemas[2].properties.sequence.const, 3);
+  assert.equal(schemas[2].properties.type.const, "NEXT_PROMPT");
+  assert.equal(schemas[2].properties.correlation_id.const, messages[1].message_id);
+  assert.notDeepEqual(schemas[0], schemas[1]);
+  assert.notDeepEqual(schemas[1], schemas[2]);
 });
 
 test("preserves the failing relay stage and completed transmission count", async () => {
@@ -79,6 +98,20 @@ test("preserves the failing relay stage and completed transmission count", async
       return true;
     });
   }
+});
+
+test("rejects an incorrect generated route after schema-constrained turns", async () => {
+  const messages = fixtureMessages();
+  const invalidReport = { ...messages[1], correlation_id: sessionId };
+  const agent = new FakeRelayAgent([JSON.stringify(messages[0]), JSON.stringify(invalidReport)]);
+  await assert.rejects(runLocalRelay(agent, relayRequest()), (error) => {
+    assert.ok(error instanceof RelayFailure);
+    assert.equal(error.code, "UNEXPECTED_MESSAGE_ROUTE");
+    assert.equal(error.relayStage, "CODEX_REPORT");
+    assert.equal(error.completedTransmissions, 2);
+    return true;
+  });
+  assert.deepEqual(agent.deletes, ["codex-thread", "work-thread"]);
 });
 
 test("cleans both synthetic threads after a relay error", async () => {

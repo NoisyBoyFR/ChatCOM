@@ -77,10 +77,27 @@ function safeErrorCode(error: unknown): string {
   return /^[A-Z][A-Z0-9_]{0,63}$/u.test(candidate) ? candidate : "MCP_INTERNAL_ERROR";
 }
 
+function safeRelayStage(error: unknown): string {
+  if (!(error instanceof RelayFailure)) return "NONE";
+  return error.relayStage ?? "NONE";
+}
+
+function safeCompletedTransmissions(error: unknown): number {
+  return error instanceof RelayFailure && Number.isSafeInteger(error.completedTransmissions) && error.completedTransmissions >= 0 ? error.completedTransmissions : 0;
+}
+
+function safeCleanupStatus(error: unknown): "CONFIRMED" | "NOT_CONFIRMED" {
+  if (!(error instanceof RelayFailure)) return "NOT_CONFIRMED";
+  return error.cleanupFailures.length === 0 && error.cleanupErrors.length === 0 ? "CONFIRMED" : "NOT_CONFIRMED";
+}
+
 function toolFailure(error: unknown) {
   return {
     isError: true,
-    content: [{ type: "text" as const, text: `CHATCOM_MCP kind=FAILURE code=${safeErrorCode(error)}` }],
+    content: [{
+      type: "text" as const,
+      text: `CHATCOM_MCP kind=FAILURE code=${safeErrorCode(error)} relay_stage=${safeRelayStage(error)} completed_transmissions=${safeCompletedTransmissions(error)} cleanup=${safeCleanupStatus(error)}`,
+    }],
   };
 }
 

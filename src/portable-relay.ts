@@ -1,6 +1,5 @@
 import { createCodexSdkRelayClient, type CodexSdkRelayClient } from "./codex-sdk-relay.js";
 import { RelayFailure, runLocalRelay, type RelayAgent, type RelayResult } from "./local-relay.js";
-import { MESSAGE_OUTPUT_SCHEMA } from "./message-contract.js";
 import type { PortableRelayConfig } from "./relay-config.js";
 
 export interface PortableRelayRunOptions {
@@ -22,8 +21,8 @@ class StructuredRelayAgent implements RelayAgent {
     return this.client.startThread(instructions, cwd);
   }
 
-  runTurn(threadId: string, prompt: string, signal?: AbortSignal): Promise<string> {
-    return this.client.runTurn(threadId, prompt, MESSAGE_OUTPUT_SCHEMA, signal);
+  runTurn(threadId: string, prompt: string, outputSchema?: unknown, signal?: AbortSignal): Promise<string> {
+    return this.client.runTurn(threadId, prompt, outputSchema, signal);
   }
 
   deleteThread(threadId: string): Promise<void> {

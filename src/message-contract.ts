@@ -45,6 +45,17 @@ export interface MessageEnvelope {
   user_action_needed: boolean;
 }
 
+export interface MessageRouteExpectation {
+  sessionId: string;
+  sequence: number;
+  sender: MessageRole;
+  recipient: MessageRole;
+  type: MessageType;
+  correlationId: string;
+  phase: string;
+  point: string;
+}
+
 export class MessageContractError extends Error {
   readonly code: string;
 
@@ -237,3 +248,27 @@ export const MESSAGE_OUTPUT_SCHEMA = {
     user_action_needed: { type: "boolean" },
   },
 } as const;
+
+export function createMessageOutputSchema(expectation: MessageRouteExpectation) {
+  return {
+    type: "object",
+    additionalProperties: false,
+    required: [...MESSAGE_KEYS],
+    properties: {
+      version: { const: MESSAGE_VERSION },
+      session_id: { const: expectation.sessionId },
+      message_id: { type: "string", pattern: MESSAGE_UUID_PATTERN.source },
+      correlation_id: { const: expectation.correlationId },
+      sequence: { const: expectation.sequence },
+      sender: { const: expectation.sender },
+      recipient: { const: expectation.recipient },
+      type: { const: expectation.type },
+      phase: { const: expectation.phase },
+      point: { const: expectation.point },
+      content: { type: "string", minLength: 1, description: "UTF-8 byte length is bounded by MAX_CONTENT_BYTES at runtime." },
+      created_at: { type: "string", pattern: MESSAGE_DATE_PATTERN.source },
+      delivery_status: { const: "CREATED" },
+      user_action_needed: { const: false },
+    },
+  } as const;
+}

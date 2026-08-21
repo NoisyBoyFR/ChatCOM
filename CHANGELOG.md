@@ -9,8 +9,9 @@ All notable ChatCOM changes are recorded in this file. Dates use the ISO `YYYY-M
 - Added closed-by-default policy checks for packaging, Windows x64, publisher, timestamped Authenticode signatures, repository, version, and downgrade protection.
 - Extended Windows validation metadata with Squirrel `Setup.exe`, full `.nupkg`, `RELEASES`, hashes, channel, and signature state.
 - Public automatic updates remain disabled until the signing pipeline is configured; no release or tag was created.
-- Added a protected, manual Microsoft Artifact Signing workflow using GitHub OIDC, pinned actions, recursive packaged-binary signing, RFC 3161 timestamping, exact publisher validation, and a separately named signed validation artifact.
-- Added fail-closed Authenticode verification and owner setup documentation; no client secret or private certificate material is stored in the repository.
+- Replaced the inactive Azure Artifact Signing design with a protected, manual SignPath Foundation Open Source Code Signing workflow using the GitHub trusted build system and pinned actions.
+- Added MIT licensing, privacy, security, third-party notices, a code-signing policy, and a SignPath owner application dossier.
+- Added fail-closed Authenticode verification, independent publisher/timestamp checks, post-signing hashes, and a `SIGNED` manifest; no client secret or private certificate material is stored in the repository.
 
 ## [1.0.0-rc.3] - 2026-08-21
 

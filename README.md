@@ -13,6 +13,21 @@
 
 **Current source candidate:** `1.0.0-rc.4` · Windows x64 · the protected Artifact Signing workflow is ready, but public updates remain disabled until the external identity and certificate profile are configured
 
+## RC.4 publication and signing gate
+
+RC.4 is a source candidate, not a public release. Windows publication is
+blocked until the owner completes the SignPath Foundation Open Source Code
+Signing application and the protected workflow produces a `SIGNED` manifest.
+The workflow is manual, runs only from `main`, cannot create tags or Releases,
+and never runs `npm publish`. See [WINDOWS-SIGNING.md](WINDOWS-SIGNING.md),
+[CODE-SIGNING-POLICY.md](CODE-SIGNING-POLICY.md), and the
+[SignPath application dossier](SIGNPATH-APPLICATION.md).
+
+ChatCOM is distributed under the MIT License with copyright
+`Copyright (c) 2026 Alexandre Balladelli`; see [LICENSE](LICENSE),
+[PRIVACY.md](PRIVACY.md), [SECURITY.md](SECURITY.md), and
+[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
+
 ## What is ChatCOM?
 
 ChatCOM coordinates a bounded exchange between two local roles:
@@ -61,10 +76,10 @@ restart is offered only after confirmed cleanup.
 
 The installer requires no administrator rights, does not change `PATH`, does not configure MCP, and does not start Codex or a relay automatically. It is currently **unsigned**; verify its checksum and continue only if you trust this repository and release.
 
-The manual, OIDC-based Windows signing workflow and its one-time Azure/GitHub
-owner setup are documented in [WINDOWS-SIGNING.md](WINDOWS-SIGNING.md). It
-creates only a temporary signed validation artifact and cannot publish a tag or
-Release.
+The manual SignPath Foundation Windows signing workflow and its one-time
+GitHub owner setup are documented in [WINDOWS-SIGNING.md](WINDOWS-SIGNING.md).
+It creates only a temporary signed validation artifact and cannot publish a
+tag or Release.
 
 The complete machine-readable build information is available in [desktop-build-manifest.json](https://github.com/NoisyBoyFR/ChatCOM/releases/download/v1.0.0-rc.3/desktop-build-manifest.json).
 
@@ -86,7 +101,7 @@ The complete machine-readable build information is available in [desktop-build-m
 - IPC channels and senders are allowlisted and validated;
 - diagnostics expose bounded status metadata only.
 
-The authenticated MCP relay has completed a real three-transmission proof with confirmed cleanup. The RC.4 updater architecture, RC.3 Desktop interface, localization, settings, and installer are covered by 123 deterministic tests and multi-platform CI; a separate real GUI relay proof has not yet been claimed. See [`.ai/PROOF.md`](.ai/PROOF.md).
+The authenticated MCP relay has completed a real three-transmission proof with confirmed cleanup. The RC.4 updater architecture, RC.3 Desktop interface, localization, settings, installer, and SignPath guards are covered by 126 deterministic tests and multi-platform CI; a separate real GUI relay proof has not yet been claimed. See [`.ai/PROOF.md`](.ai/PROOF.md).
 
 ## Developer quick start
 
@@ -108,7 +123,7 @@ The expected installer is:
 out-desktop/make/squirrel.windows/x64/ChatCOM-Desktop-1.0.0-rc.4-Setup.exe
 ```
 
-`npm run verify` performs the build, core and Desktop typechecks, 123 deterministic tests, example configuration validation, production dependency audit, and npm package dry-run. Diagnostic commands may contact a real Codex runtime and require explicit authorization.
+`npm run verify` performs the build, core and Desktop typechecks, 126 deterministic tests, example configuration validation, production dependency audit, and npm package dry-run. Diagnostic commands may contact a real Codex runtime and require explicit authorization.
 
 ## CLI configuration
 
@@ -152,6 +167,12 @@ Build ChatCOM, copy [`.codex/config.toml.example`](.codex/config.toml.example) i
 - [Release procedure](RELEASING.md)
 - [Operational proof](.ai/PROOF.md)
 - [Durable Codex prompt](CODEX-CHATCOM-PROMPT.md)
+- [License](LICENSE)
+- [Privacy notice](PRIVACY.md)
+- [Security policy](SECURITY.md)
+- [Third-party notices](THIRD-PARTY-NOTICES.md)
+- [Windows signing policy](CODE-SIGNING-POLICY.md)
+- [SignPath application dossier](SIGNPATH-APPLICATION.md)
 - [RC.3 pre-release](https://github.com/NoisyBoyFR/ChatCOM/releases/tag/v1.0.0-rc.3)
 
 ## Origin

@@ -1,68 +1,66 @@
-# Windows code-signing setup
+# Windows code signing with SignPath Foundation
 
-ChatCOM uses Microsoft Artifact Signing (formerly Trusted Signing) for public
-Windows Authenticode signatures. The workflow is intentionally manual,
-protected by the `windows-code-signing` GitHub environment, and incapable of
-creating a tag or GitHub Release.
+ChatCOM uses SignPath Foundation Open Source Code Signing for the public
+Windows publisher signature. The workflow is intentionally manual and
+protected by the `windows-code-signing` GitHub environment. Azure Artifact
+Signing and PFX-based signing are not used by this project.
 
-## External prerequisites
+## Owner prerequisites
 
-These steps require the repository owner and cannot be completed by source
-code alone:
+The repository owner must complete the SignPath open-source application and
+obtain project approval before any real signing request. SignPath must have
+access to the public repository through its GitHub trusted build system. The
+owner must configure a public-trust signing policy and an artifact
+configuration that signs only project-owned PE files and excludes or verifies
+third-party Electron, Chromium, Node.js, Codex runtime, and Squirrel files.
 
-1. Create or select an Azure subscription and register the
-   `Microsoft.CodeSigning` resource provider.
-2. Create an Artifact Signing account.
-3. Complete identity validation in the Azure portal.
-4. Create a `PublicTrust` certificate profile.
-5. Create a Microsoft Entra application and service principal.
-6. Add a federated credential with this exact subject:
+The protected environment must be restricted to `main` and should require a
+reviewer. Add these values in GitHub environment settings only:
 
-   ```text
-   repo:NoisyBoyFR/ChatCOM:environment:windows-code-signing
-   ```
+| Name | Kind | Purpose |
+| --- | --- | --- |
+| `SIGNPATH_API_TOKEN` | secret | SignPath API authentication |
+| `SIGNPATH_ORGANIZATION_ID` | variable | SignPath organization |
+| `SIGNPATH_PROJECT_SLUG` | variable | SignPath project |
+| `SIGNPATH_SIGNING_POLICY_SLUG` | variable | approved signing policy |
+| `SIGNPATH_ARTIFACT_CONFIGURATION_SLUG` | variable | nested artifact rules |
+| `SIGNPATH_PUBLISHER_SUBJECT` | variable | expected Authenticode subject |
 
-7. Assign the service principal the **Artifact Signing Certificate Profile
-   Signer** role on the certificate profile, signing account, or containing
-   resource group.
+Never commit or paste a token, private key, certificate password, or other
+credential. The exact identifiers and subject are external owner configuration
+and are deliberately not invented in this repository.
 
-Never send a private key, client secret, certificate password, access token,
-or Azure credential through ChatCOM, an issue, a pull request, or a log.
+## Protected workflow
 
-## Protected GitHub environment
+`.github/workflows/sign-windows.yml` has `workflow_dispatch` only. It accepts
+`SIGN_RC4`, requires `main`, uses the `windows-code-signing` environment, and
+has only `actions: read` and `contents: read` permissions. It checks the
+repository origin, runs `npm run verify`, builds the Squirrel package, uploads
+the input as a temporary GitHub artifact, submits one SignPath request with the
+pinned official action, downloads the result, and independently checks
+`ChatCOM.exe` and the final Setup with Authenticode, publisher, and RFC 3161
+timestamp validation. It then emits `desktop-build-manifest.json` and
+`SHA256SUMS.txt` with `signatureState: SIGNED`.
 
-Create the `windows-code-signing` environment, restrict deployment to `main`,
-and require a reviewer when the repository plan supports it. Define these
-environment variables directly in GitHub settings:
+The workflow cannot create a branch, tag, Release, public update feed, or npm
+publication. A failed, unsigned, or unverified result is validation-only and
+must not be published.
 
-| Variable | Purpose |
-| --- | --- |
-| `AZURE_TENANT_ID` | Microsoft Entra tenant ID |
-| `AZURE_CLIENT_ID` | Federated application/client ID |
-| `AZURE_SUBSCRIPTION_ID` | Azure subscription containing Artifact Signing |
-| `ARTIFACT_SIGNING_ENDPOINT` | Regional Artifact Signing endpoint |
-| `ARTIFACT_SIGNING_ACCOUNT_NAME` | Artifact Signing account name |
-| `ARTIFACT_SIGNING_CERTIFICATE_PROFILE` | Public Trust certificate profile |
-| `ARTIFACT_SIGNING_PUBLISHER_SUBJECT` | Exact Authenticode certificate subject |
+## Manual run
 
-OIDC is used instead of a client secret. Do not create repository secrets for
-certificate material.
+After owner approval and environment configuration, select **Sign Windows RC**
+from GitHub Actions, choose `main`, enter `SIGN_RC4`, and approve the protected
+environment if prompted. The expected bounded markers are:
 
-## Manual validation run
+```text
+CHATCOM_SIGNING_PREFLIGHT kind=READY provider=SIGNPATH configuration=COMPLETE
+CHATCOM_SIGNPATH_RESULT kind=SIGNED manifest=SIGNED hashes=EMITTED
+```
 
-From the GitHub Actions page, select **Sign Windows RC**, choose `main`, enter
-`SIGN_RC4`, and run the workflow. It will:
+No ChatCOM relay or MCP proof is started by this workflow. A successful signed
+validation is not itself permission to create a tag or GitHub Release.
 
-1. validate the protected context and required variables;
-2. verify the source and package the Windows application;
-3. authenticate to Azure with OIDC;
-4. sign packaged PE binaries with RSA/SHA-256 and an RFC 3161 timestamp;
-5. build the Squirrel package from the signed application;
-6. sign and independently verify the final Setup;
-7. calculate final hashes and emit a signed build manifest;
-8. upload a temporary `-signed` validation artifact.
-
-The workflow fails closed when configuration, signature, publisher, timestamp,
-package, or checksum validation fails. A successful validation artifact still
-does not authorize or automatically create a tag, Release, public update feed,
-or npm publication.
+See [CODE-SIGNING-POLICY.md](CODE-SIGNING-POLICY.md) and
+[SIGNPATH-APPLICATION.md](SIGNPATH-APPLICATION.md) for the policy and owner
+application dossier. The privacy and security boundaries are documented in
+[PRIVACY.md](PRIVACY.md) and [SECURITY.md](SECURITY.md).

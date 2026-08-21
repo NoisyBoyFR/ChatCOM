@@ -32,6 +32,17 @@ https://github.com/NoisyBoyFR/ChatCOM/releases/download/v1.0.0-rc.3/ChatCOM-Desk
 The release must remain marked as a pre-release. It is not the stable `v1.0.0`
 release and does not authorize npm publication.
 
+## RC.4 signing gate
+
+RC.4 remains a source candidate until the owner completes the SignPath
+Foundation open-source application and configures the protected
+`windows-code-signing` environment. Run `.github/workflows/sign-windows.yml`
+manually from `main` with `SIGN_RC4` only after that external approval. The
+workflow produces no tag, GitHub Release, update feed, or npm publication. It
+must report `SIGNED`, pass independent Authenticode publisher and timestamp
+checks for the application and Setup, and emit final SHA-256 hashes before a
+separate publication authorization can be considered.
+
 ## Release gate
 
 1. Start from a clean `main` aligned with `origin/main`.
@@ -91,12 +102,11 @@ silently downgrades.
 
 The protected manual signing workflow is `.github/workflows/sign-windows.yml`.
 It runs only from `main`, requires the `windows-code-signing` environment and
-the exact `SIGN_RC4` confirmation, authenticates to Azure through OIDC, and
-uses the official Artifact Signing action pinned to a full commit SHA. It signs
-the packaged PE files before Squirrel assembly and signs the final Setup before
-hash and manifest generation. The workflow only uploads a temporary
-`-signed` validation artifact; it has read-only repository permissions and
-cannot create a tag or GitHub Release.
+the exact `SIGN_RC4` confirmation, submits one request through the official
+SignPath GitHub trusted build action pinned to a full commit SHA, and verifies
+the signed application and final Setup before hash and manifest generation. The
+workflow only uploads temporary input and signed validation artifacts; it has
+read-only repository permissions and cannot create a tag or GitHub Release.
 
 The repository owner must complete the identity validation, Public Trust
 certificate profile, federated credential, role assignment, and protected

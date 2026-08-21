@@ -62,8 +62,8 @@ confirmé.
 
 L’installateur ne demande pas de droits administrateur, ne modifie pas le `PATH`, ne configure pas MCP et ne démarre automatiquement ni Codex ni un relais. Il est actuellement **non signé** : vérifiez son empreinte et continuez uniquement si vous faites confiance à ce dépôt et à cette préversion.
 
-Le workflow manuel de signature Windows par OIDC et la configuration unique à
-effectuer par le propriétaire dans Azure/GitHub sont décrits dans
+Le workflow manuel de signature Windows SignPath et la configuration unique à
+effectuer par le propriétaire dans GitHub sont décrits dans
 [WINDOWS-SIGNING.md](WINDOWS-SIGNING.md). Ce workflow produit uniquement un
 artefact temporaire signé et ne peut créer ni tag ni Release.
 
@@ -87,7 +87,7 @@ Les informations de build lisibles par machine se trouvent dans [desktop-build-m
 - les canaux IPC et leurs émetteurs sont autorisés et validés explicitement ;
 - les diagnostics exposent uniquement des métadonnées bornées.
 
-Le relais MCP authentifié a déjà réussi une preuve réelle de trois transmissions avec nettoyage confirmé. L’architecture de mise à jour RC.4, l’interface Desktop RC.3, ses traductions, ses paramètres et son installateur sont couverts par 123 tests déterministes et une CI multiplateforme ; aucune nouvelle preuve réelle du relais depuis la GUI n’est encore revendiquée. Consultez [`.ai/PROOF.md`](.ai/PROOF.md).
+Le relais MCP authentifié a déjà réussi une preuve réelle de trois transmissions avec nettoyage confirmé. L’architecture de mise à jour RC.4, l’interface Desktop RC.3, ses traductions, ses paramètres, son installateur et les garde-fous SignPath sont couverts par 126 tests déterministes et une CI multiplateforme ; aucune nouvelle preuve réelle du relais depuis la GUI n’est encore revendiquée. Consultez [`.ai/PROOF.md`](.ai/PROOF.md).
 
 ## Démarrage rapide pour les développeurs
 
@@ -109,7 +109,7 @@ Installateur attendu :
 out-desktop/make/squirrel.windows/x64/ChatCOM-Desktop-1.0.0-rc.4-Setup.exe
 ```
 
-`npm run verify` exécute le build, les vérifications TypeScript du noyau et de Desktop, 123 tests déterministes, la validation de configuration, l’audit des dépendances de production et le contrôle du paquet npm. Les commandes de diagnostic peuvent contacter un runtime Codex réel et nécessitent une autorisation explicite.
+`npm run verify` exécute le build, les vérifications TypeScript du noyau et de Desktop, 126 tests déterministes, la validation de configuration, l’audit des dépendances de production et le contrôle du paquet npm. Les commandes de diagnostic peuvent contacter un runtime Codex réel et nécessitent une autorisation explicite.
 
 ## Configuration de la CLI
 
@@ -153,7 +153,21 @@ Compilez ChatCOM, copiez [`.codex/config.toml.example`](.codex/config.toml.examp
 - [Procédure de publication](RELEASING.md)
 - [Preuves opérationnelles](.ai/PROOF.md)
 - [Prompt Codex durable](CODEX-CHATCOM-PROMPT.md)
+- [Licence](LICENSE)
+- [Avis de confidentialite](PRIVACY.md)
+- [Politique de securite](SECURITY.md)
+- [Notices tierces](THIRD-PARTY-NOTICES.md)
+- [Politique de signature Windows](CODE-SIGNING-POLICY.md)
+- [Dossier de candidature SignPath](SIGNPATH-APPLICATION.md)
 - [Préversion RC.3](https://github.com/NoisyBoyFR/ChatCOM/releases/tag/v1.0.0-rc.3)
+
+## Gate de publication RC.4
+
+La RC.4 est une candidate source, pas une release publique. La publication
+Windows reste bloquee tant que le proprietaire n'a pas termine la candidature
+SignPath Foundation Open Source Code Signing et que le workflow protege n'a
+pas produit un manifeste `SIGNED`. Le workflow est manuel, limite a `main`, ne
+peut creer ni tag ni Release et n'execute jamais `npm publish`.
 
 ## Origine
 

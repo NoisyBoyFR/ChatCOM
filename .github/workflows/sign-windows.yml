@@ -4,13 +4,13 @@ on:
   workflow_dispatch:
     inputs:
       confirmation:
-        description: Type SIGN_RC4 to authorize one signed validation artifact
+        description: Type SIGN_RC4 to authorize one protected signing request
         required: true
         type: string
 
 permissions:
+  actions: read
   contents: read
-  id-token: write
 
 concurrency:
   group: chatcom-windows-code-signing
@@ -18,43 +18,48 @@ concurrency:
 
 jobs:
   sign-windows:
-    name: Sign and verify Windows RC.4
+    name: Sign and verify Windows RC.4 with SignPath
     runs-on: windows-2025
     environment: windows-code-signing
     steps:
-      - name: Validate protected signing context
+      - name: Validate protected SignPath context
         shell: pwsh
         env:
           CHATCOM_CONFIRMATION: ${{ inputs.confirmation }}
           CHATCOM_REF: ${{ github.ref }}
-          AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
-          AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
-          AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
-          ARTIFACT_SIGNING_ENDPOINT: ${{ vars.ARTIFACT_SIGNING_ENDPOINT }}
-          ARTIFACT_SIGNING_ACCOUNT_NAME: ${{ vars.ARTIFACT_SIGNING_ACCOUNT_NAME }}
-          ARTIFACT_SIGNING_CERTIFICATE_PROFILE: ${{ vars.ARTIFACT_SIGNING_CERTIFICATE_PROFILE }}
-          ARTIFACT_SIGNING_PUBLISHER_SUBJECT: ${{ vars.ARTIFACT_SIGNING_PUBLISHER_SUBJECT }}
+          SIGNPATH_API_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
+          SIGNPATH_ORGANIZATION_ID: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          SIGNPATH_PROJECT_SLUG: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          SIGNPATH_SIGNING_POLICY_SLUG: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+          SIGNPATH_ARTIFACT_CONFIGURATION_SLUG: ${{ vars.SIGNPATH_ARTIFACT_CONFIGURATION_SLUG }}
+          SIGNPATH_PUBLISHER_SUBJECT: ${{ vars.SIGNPATH_PUBLISHER_SUBJECT }}
         run: |
           if ($env:CHATCOM_CONFIRMATION -cne "SIGN_RC4") { throw "SIGNING_CONFIRMATION_INVALID" }
           if ($env:CHATCOM_REF -cne "refs/heads/main") { throw "SIGNING_REF_INVALID" }
           $required = @(
-            "AZURE_TENANT_ID",
-            "AZURE_CLIENT_ID",
-            "AZURE_SUBSCRIPTION_ID",
-            "ARTIFACT_SIGNING_ENDPOINT",
-            "ARTIFACT_SIGNING_ACCOUNT_NAME",
-            "ARTIFACT_SIGNING_CERTIFICATE_PROFILE",
-            "ARTIFACT_SIGNING_PUBLISHER_SUBJECT"
+            "SIGNPATH_API_TOKEN",
+            "SIGNPATH_ORGANIZATION_ID",
+            "SIGNPATH_PROJECT_SLUG",
+            "SIGNPATH_SIGNING_POLICY_SLUG",
+            "SIGNPATH_ARTIFACT_CONFIGURATION_SLUG",
+            "SIGNPATH_PUBLISHER_SUBJECT"
           )
           foreach ($name in $required) {
             if ([string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($name))) {
               throw "SIGNING_CONFIGURATION_INCOMPLETE"
             }
           }
-          "CHATCOM_SIGNING_PREFLIGHT kind=READY configuration=COMPLETE"
+          "CHATCOM_SIGNING_PREFLIGHT kind=READY provider=SIGNPATH configuration=COMPLETE"
 
       - name: Check out repository
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+
+      - name: Verify checked-out origin and commit
+        shell: pwsh
+        run: |
+          $origin = git remote get-url origin
+          if ($origin -cne "https://github.com/NoisyBoyFR/ChatCOM.git") { throw "SIGNING_ORIGIN_INVALID" }
+          if ((git rev-parse --abbrev-ref HEAD) -cne "main") { throw "SIGNING_BRANCH_INVALID" }
 
       - name: Set up Node.js
         uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444
@@ -68,104 +73,68 @@ jobs:
       - name: Verify source
         run: npm run verify
 
-      - name: Package unsigned application directory
-        run: npm run desktop:package
+      - name: Build unsigned desktop package for SignPath
+        run: npm run desktop:make
 
-      - name: Authenticate to Azure with OIDC
-        uses: azure/login@f5d393ae46f8fde4be8b75f32e3fc50e654ad0ca
+      - name: Upload protected signing input
+        id: upload-signing-input
+        uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808
         with:
-          client-id: ${{ vars.AZURE_CLIENT_ID }}
-          tenant-id: ${{ vars.AZURE_TENANT_ID }}
-          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+          name: chatcom-desktop-1.0.0-rc.4-windows-x64-signpath-input
+          path: out-desktop
+          if-no-files-found: error
+          retention-days: 7
 
-      - name: Sign packaged Windows binaries
-        uses: azure/artifact-signing-action@c7ab2a863ab5f9a846ddb8265964877ef296ee82
+      - name: Submit one SignPath signing request
+        uses: signpath/github-action-submit-signing-request@c92b958760219087e01f8d67a1669ed57afe2627
         with:
-          endpoint: ${{ vars.ARTIFACT_SIGNING_ENDPOINT }}
-          signing-account-name: ${{ vars.ARTIFACT_SIGNING_ACCOUNT_NAME }}
-          certificate-profile-name: ${{ vars.ARTIFACT_SIGNING_CERTIFICATE_PROFILE }}
-          files-folder: ${{ github.workspace }}\out-desktop\ChatCOM-win32-x64
-          files-folder-filter: exe,dll,node
-          files-folder-recurse: true
-          append-signature: true
-          file-digest: SHA256
-          timestamp-rfc3161: http://timestamp.acs.microsoft.com
-          timestamp-digest: SHA256
-          description: ChatCOM Desktop
-          description-url: https://github.com/NoisyBoyFR/ChatCOM
-          exclude-environment-credential: true
-          exclude-workload-identity-credential: true
-          exclude-managed-identity-credential: true
-          exclude-shared-token-cache-credential: true
-          exclude-visual-studio-credential: true
-          exclude-visual-studio-code-credential: true
-          exclude-azure-cli-credential: false
-          exclude-azure-powershell-credential: true
-          exclude-azure-developer-cli-credential: true
-          exclude-interactive-browser-credential: true
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+          artifact-configuration-slug: ${{ vars.SIGNPATH_ARTIFACT_CONFIGURATION_SLUG }}
+          github-artifact-id: ${{ steps.upload-signing-input.outputs.artifact-id }}
+          github-token: ${{ github.token }}
+          wait-for-completion: true
+          wait-for-completion-timeout-in-seconds: 1800
+          output-artifact-directory: out-desktop-signed
 
-      - name: Verify packaged Windows signatures
+      - name: Verify signed PE files independently
         shell: pwsh
         env:
-          ARTIFACT_SIGNING_PUBLISHER_SUBJECT: ${{ vars.ARTIFACT_SIGNING_PUBLISHER_SUBJECT }}
+          SIGNPATH_PUBLISHER_SUBJECT: ${{ vars.SIGNPATH_PUBLISHER_SUBJECT }}
         run: |
-          .\scripts\verify-windows-signature.ps1 `
-            -Path "out-desktop\ChatCOM-win32-x64" `
-            -Recurse `
-            -SkipSignTool
-          .\scripts\verify-windows-signature.ps1 `
-            -Path "out-desktop\ChatCOM-win32-x64\ChatCOM.exe" `
-            -ExpectedSubject $env:ARTIFACT_SIGNING_PUBLISHER_SUBJECT `
-            -RequireTimestamp
+          $setup = Join-Path $PWD "out-desktop-signed\make\squirrel.windows\x64\ChatCOM-Desktop-1.0.0-rc.4-Setup.exe"
+          $app = Join-Path $PWD "out-desktop-signed\ChatCOM-win32-x64\ChatCOM.exe"
+          if (!(Test-Path -LiteralPath $setup) -or !(Test-Path -LiteralPath $app)) { throw "SIGNED_PACKAGE_LAYOUT_INVALID" }
+          .\scripts\verify-windows-signature.ps1 -Path $app -ExpectedSubject $env:SIGNPATH_PUBLISHER_SUBJECT -RequireTimestamp
+          .\scripts\verify-windows-signature.ps1 -Path $setup -ExpectedSubject $env:SIGNPATH_PUBLISHER_SUBJECT -RequireTimestamp
 
-      - name: Build Squirrel artifacts from signed application
-        run: npx electron-forge make --platform=win32 --arch=x64 --skip-package
-
-      - name: Sign final Setup
-        uses: azure/artifact-signing-action@c7ab2a863ab5f9a846ddb8265964877ef296ee82
-        with:
-          endpoint: ${{ vars.ARTIFACT_SIGNING_ENDPOINT }}
-          signing-account-name: ${{ vars.ARTIFACT_SIGNING_ACCOUNT_NAME }}
-          certificate-profile-name: ${{ vars.ARTIFACT_SIGNING_CERTIFICATE_PROFILE }}
-          files: ${{ github.workspace }}\out-desktop\make\squirrel.windows\x64\ChatCOM-Desktop-1.0.0-rc.4-Setup.exe
-          file-digest: SHA256
-          timestamp-rfc3161: http://timestamp.acs.microsoft.com
-          timestamp-digest: SHA256
-          description: ChatCOM Desktop Setup
-          description-url: https://github.com/NoisyBoyFR/ChatCOM
-          exclude-environment-credential: true
-          exclude-workload-identity-credential: true
-          exclude-managed-identity-credential: true
-          exclude-shared-token-cache-credential: true
-          exclude-visual-studio-credential: true
-          exclude-visual-studio-code-credential: true
-          exclude-azure-cli-credential: false
-          exclude-azure-powershell-credential: true
-          exclude-azure-developer-cli-credential: true
-          exclude-interactive-browser-credential: true
-
-      - name: Verify signed Windows package
+      - name: Verify signed package and emit final hashes
         shell: pwsh
         env:
-          ARTIFACT_SIGNING_PUBLISHER_SUBJECT: ${{ vars.ARTIFACT_SIGNING_PUBLISHER_SUBJECT }}
+          SIGNPATH_PUBLISHER_SUBJECT: ${{ vars.SIGNPATH_PUBLISHER_SUBJECT }}
         run: |
           node scripts/verify-desktop-package.mjs `
-            --setup "out-desktop/make/squirrel.windows/x64/ChatCOM-Desktop-1.0.0-rc.4-Setup.exe" `
-            --app "out-desktop/ChatCOM-win32-x64" `
-            --manifest "out-desktop/desktop-build-manifest.json" `
-            --sums "out-desktop/SHA256SUMS.txt" `
+            --setup "out-desktop-signed/make/squirrel.windows/x64/ChatCOM-Desktop-1.0.0-rc.4-Setup.exe" `
+            --app "out-desktop-signed/ChatCOM-win32-x64" `
+            --manifest "out-desktop-signed/desktop-build-manifest.json" `
+            --sums "out-desktop-signed/SHA256SUMS.txt" `
             --expect-signed `
-            --publisher-subject $env:ARTIFACT_SIGNING_PUBLISHER_SUBJECT
+            --publisher-subject $env:SIGNPATH_PUBLISHER_SUBJECT
+          $manifest = Get-Content -Raw "out-desktop-signed\desktop-build-manifest.json" | ConvertFrom-Json
+          if ($manifest.signatureState -cne "SIGNED" -or $manifest.signature -cne "SIGNED") { throw "SIGNED_MANIFEST_INVALID" }
+          "CHATCOM_SIGNPATH_RESULT kind=SIGNED manifest=SIGNED hashes=EMITTED"
 
       - name: Upload signed validation artifact
         uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808
         with:
-          name: chatcom-desktop-1.0.0-rc.4-windows-x64-signed
+          name: chatcom-desktop-1.0.0-rc.4-windows-x64-signpath-signed-validation
           path: |
-            out-desktop/make/squirrel.windows/x64/ChatCOM-Desktop-1.0.0-rc.4-Setup.exe
-            out-desktop/make/squirrel.windows/x64/*-full.nupkg
-            out-desktop/make/squirrel.windows/x64/RELEASES
-            out-desktop/SHA256SUMS.txt
-            out-desktop/desktop-build-manifest.json
+            out-desktop-signed/make/squirrel.windows/x64/ChatCOM-Desktop-1.0.0-rc.4-Setup.exe
+            out-desktop-signed/make/squirrel.windows/x64/*-full.nupkg
+            out-desktop-signed/make/squirrel.windows/x64/RELEASES
+            out-desktop-signed/SHA256SUMS.txt
+            out-desktop-signed/desktop-build-manifest.json
           if-no-files-found: error
           retention-days: 14

@@ -1,0 +1,58 @@
+import { readFile } from "node:fs/promises";
+import { strict as assert } from "node:assert";
+import { test } from "node:test";
+
+test("SignPath application documents use the owner identity and required policies", async () => {
+  const license = await readFile("LICENSE", "utf8");
+  const packageJson = JSON.parse(await readFile("package.json", "utf8")) as { license?: string };
+  const policy = await readFile("CODE-SIGNING-POLICY.md", "utf8");
+  const privacy = await readFile("PRIVACY.md", "utf8");
+  const security = await readFile("SECURITY.md", "utf8");
+  const notices = await readFile("THIRD-PARTY-NOTICES.md", "utf8");
+  const dossier = await readFile("SIGNPATH-APPLICATION.md", "utf8");
+  assert.equal(packageJson.license, "MIT");
+  assert.match(license, /Copyright \(c\) 2026 Alexandre Balladelli/u);
+  assert.match(license, /MIT License/u);
+  assert.match(policy, /SignPath Foundation Open Source Code Signing/u);
+  assert.match(policy, /Third-party Electron, Node\.js, Codex runtime, and Squirrel/u);
+  assert.match(privacy, /no telemetry/u);
+  assert.match(privacy, /Codex\/OpenAI/u);
+  assert.match(security, /GitHub Security\s+Advisories/u);
+  assert.match(notices, /@openai\/codex-sdk/u);
+  assert.match(dossier, /No value is invented/u);
+  assert.match(dossier, /SIGNPATH_API_TOKEN/u);
+});
+
+test("SignPath workflow is manual, main-only, pinned and publication-blocked", async () => {
+  const workflow = await readFile(".github/workflows/sign-windows.yml", "utf8");
+  assert.match(workflow, /workflow_dispatch:/u);
+  assert.match(workflow, /confirmation:/u);
+  assert.match(workflow, /SIGN_RC4/u);
+  assert.match(workflow, /environment: windows-code-signing/u);
+  assert.match(workflow, /CHATCOM_REF -cne "refs\/heads\/main"/u);
+  assert.match(workflow, /provider=SIGNPATH/u);
+  assert.match(workflow, /signpath\/github-action-submit-signing-request@c92b958760219087e01f8d67a1669ed57afe2627/u);
+  assert.match(workflow, /github-artifact-id: \$\{\{ steps\.upload-signing-input\.outputs\.artifact-id \}\}/u);
+  assert.match(workflow, /SIGNPATH_ARTIFACT_CONFIGURATION_SLUG/u);
+  assert.match(workflow, /SIGNPATH_PUBLISHER_SUBJECT/u);
+  assert.match(workflow, /SIGNPATH_RESULT kind=SIGNED/u);
+  assert.doesNotMatch(workflow, /azure\//iu);
+  assert.doesNotMatch(workflow, /AZURE_/u);
+  assert.doesNotMatch(workflow, /npm publish/u);
+  assert.doesNotMatch(workflow, /create-release|git tag|contents: write/u);
+  assert.doesNotMatch(workflow, /unsigned-validation/u);
+});
+
+test("signing policy documents independent verification and no unsigned publication", async () => {
+  const workflow = await readFile(".github/workflows/sign-windows.yml", "utf8");
+  const policy = await readFile("CODE-SIGNING-POLICY.md", "utf8");
+  const release = await readFile("RELEASING.md", "utf8");
+  const signedIndex = workflow.indexOf("CHATCOM_SIGNPATH_RESULT kind=SIGNED");
+  const manifestIndex = workflow.lastIndexOf("desktop-build-manifest.json");
+  assert.ok(signedIndex > 0);
+  assert.ok(manifestIndex > signedIndex);
+  assert.match(workflow, /verify-windows-signature\.ps1[\s\S]*-ExpectedSubject[\s\S]*-RequireTimestamp/u);
+  assert.match(workflow, /signatureState -cne "SIGNED"/u);
+  assert.match(policy, /must not be attached to a public\s+release/u);
+  assert.match(release, /RC\.4 signing gate/u);
+});

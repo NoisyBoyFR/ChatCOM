@@ -12,7 +12,7 @@ import {
   createChatComMcpServer,
   type ChatComMcpDependencies,
 } from "../mcp-server.js";
-import { createMessageForTests } from "../local-relay.js";
+import { createMessageForTests, RelayFailure } from "../local-relay.js";
 import { RelayConfigError, type PortableRelayConfig } from "../relay-config.js";
 import type { MessageEnvelope } from "../message-contract.js";
 
@@ -203,7 +203,7 @@ test("rejects a relay session mismatch without exposing envelope content", async
   try {
     const result = await client.callTool({ name: CHATCOM_RELAY_TOOL, arguments: { config_path: "relay.json" } });
     assert.equal(result.isError, true);
-    assert.equal(textContent(result), "CHATCOM_MCP kind=FAILURE code=RELAY_SESSION_MISMATCH");
+    assert.equal(textContent(result), "CHATCOM_MCP kind=FAILURE code=RELAY_SESSION_MISMATCH relay_stage=NONE completed_transmissions=0 cleanup=CONFIRMED");
     assert.equal(JSON.stringify(result).includes("LEAK_SENTINEL"), false);
   } finally {
     await client.close();
@@ -220,7 +220,7 @@ test("bounds tool failures without exposing arbitrary errors", async () => {
   try {
     const unknown = await client.callTool({ name: CHATCOM_VALIDATE_TOOL, arguments: { config_path: "secret.json" } });
     assert.equal(unknown.isError, true);
-    assert.equal(textContent(unknown), "CHATCOM_MCP kind=FAILURE code=MCP_INTERNAL_ERROR");
+    assert.equal(textContent(unknown), "CHATCOM_MCP kind=FAILURE code=MCP_INTERNAL_ERROR relay_stage=NONE completed_transmissions=0 cleanup=NOT_CONFIRMED");
     assert.equal(JSON.stringify(unknown).includes("LEAK_SENTINEL"), false);
   } finally {
     await client.close();
@@ -234,10 +234,30 @@ test("bounds tool failures without exposing arbitrary errors", async () => {
   const bounded = await connectedClient(boundedDependencies);
   try {
     const result = await bounded.client.callTool({ name: CHATCOM_VALIDATE_TOOL, arguments: { config_path: "missing.json" } });
-    assert.equal(textContent(result), "CHATCOM_MCP kind=FAILURE code=CONFIG_READ_FAILED");
+    assert.equal(textContent(result), "CHATCOM_MCP kind=FAILURE code=CONFIG_READ_FAILED relay_stage=NONE completed_transmissions=0 cleanup=NOT_CONFIRMED");
   } finally {
     await bounded.client.close();
     await bounded.server.close();
+  }
+});
+
+test("returns a bounded relay failure diagnostic with cleanup status", async () => {
+  const dependencies: ChatComMcpDependencies = {
+    loadConfig: async () => config(),
+    runRelay: async () => {
+      throw new RelayFailure("UNEXPECTED_MESSAGE_ROUTE", ["codex-thread"], ["work-thread", "codex-thread"], ["work-thread"], ["THREAD_DELETE_UNCONFIRMED"], undefined, "CODEX_REPORT", 1);
+    },
+  };
+  const { server, client } = await connectedClient(dependencies);
+  try {
+    const result = await client.callTool({ name: CHATCOM_RELAY_TOOL, arguments: { config_path: "relay.json" } });
+    assert.equal(result.isError, true);
+    assert.equal(textContent(result), "CHATCOM_MCP kind=FAILURE code=UNEXPECTED_MESSAGE_ROUTE relay_stage=CODEX_REPORT completed_transmissions=1 cleanup=NOT_CONFIRMED");
+    assert.equal(JSON.stringify(result).includes("LEAK_SENTINEL"), false);
+    assert.equal(JSON.stringify(result).includes("codex-thread"), false);
+  } finally {
+    await client.close();
+    await server.close();
   }
 });
 

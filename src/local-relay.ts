@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { AppServerClientError, type SafeTurnDiagnostic } from "./app-server-client.js";
-import { createMessage, MAX_ROUTE_BYTES, MessageContractError, MessageLedger, MESSAGE_OUTPUT_SCHEMA, parseMessageText, type MessageEnvelope } from "./message-contract.js";
+import { createMessage, createMessageOutputSchema, MAX_ROUTE_BYTES, MessageContractError, MessageLedger, MESSAGE_OUTPUT_SCHEMA, parseMessageText, type MessageEnvelope } from "./message-contract.js";
 
 export const DEFAULT_WORK_LOCAL_INSTRUCTIONS = "You are WORK_LOCAL, a local review role distinct from the current user conversation. Do not change files, act as the user, or invent user decisions. Return exactly one JSON message envelope and no markdown.";
 export const DEFAULT_CODEX_LOCAL_INSTRUCTIONS = "You are CODEX_LOCAL, a local technical role. Stay read-only, do not change files, and do not invent user authority. Return exactly one JSON message envelope and no markdown.";
@@ -20,7 +20,7 @@ export interface LocalRelayRequest {
 
 export interface RelayAgent {
   startThread(instructions: string, cwd: string): Promise<string>;
-  runTurn(threadId: string, prompt: string, signal?: AbortSignal): Promise<string>;
+  runTurn(threadId: string, prompt: string, outputSchema?: unknown, signal?: AbortSignal): Promise<string>;
   deleteThread(threadId: string): Promise<void>;
 }
 
@@ -136,11 +136,11 @@ export async function runLocalRelay(agent: RelayAgent, relayRequest: LocalRelayR
   let relayStage: RelayStage | undefined;
   let completedTransmissions = 0;
 
-  const executeTransmission = async (stage: RelayStage, threadId: string, prompt: string, failureCode: string): Promise<MessageEnvelope> => {
+  const executeTransmission = async (stage: RelayStage, threadId: string, prompt: string, failureCode: string, outputSchema: unknown): Promise<MessageEnvelope> => {
     relayStage = stage;
     try {
       if (signal?.aborted) throw new RelayFailure("RELAY_CANCELLED", [], [], [], [], undefined, stage, completedTransmissions);
-      const message = parseMessageText(await agent.runTurn(threadId, prompt, signal));
+      const message = parseMessageText(await agent.runTurn(threadId, prompt, outputSchema, signal));
       completedTransmissions += 1;
       return message;
     } catch (error) {
@@ -153,15 +153,60 @@ export async function runLocalRelay(agent: RelayAgent, relayRequest: LocalRelayR
     workThreadId = await agent.startThread(request.workInstructions, cwd);
     codexThreadId = await agent.startThread(request.codexInstructions, cwd);
 
-    const mission = await executeTransmission("WORK_MISSION", workThreadId, promptForWorkMission(request), "WORK_MISSION_FAILED");
+    const mission = await executeTransmission(
+      "WORK_MISSION",
+      workThreadId,
+      promptForWorkMission(request),
+      "WORK_MISSION_FAILED",
+      createMessageOutputSchema({
+        sessionId,
+        sequence: 1,
+        sender: "WORK_LOCAL",
+        recipient: "CODEX_LOCAL",
+        type: "MISSION",
+        correlationId: sessionId,
+        phase: request.phase,
+        point: request.point,
+      }),
+    );
     assertExpected(mission, { sessionId, sequence: 1, sender: "WORK_LOCAL", recipient: "CODEX_LOCAL", type: "MISSION", correlationId: sessionId, phase: request.phase, point: request.point });
     ledger.accept(mission);
 
-    const report = await executeTransmission("CODEX_REPORT", codexThreadId, promptForCodexReport(mission), "CODEX_REPORT_FAILED");
+    const report = await executeTransmission(
+      "CODEX_REPORT",
+      codexThreadId,
+      promptForCodexReport(mission),
+      "CODEX_REPORT_FAILED",
+      createMessageOutputSchema({
+        sessionId,
+        sequence: 2,
+        sender: "CODEX_LOCAL",
+        recipient: "WORK_LOCAL",
+        type: "REPORT",
+        correlationId: mission.message_id,
+        phase: request.phase,
+        point: request.point,
+      }),
+    );
     assertExpected(report, { sessionId, sequence: 2, sender: "CODEX_LOCAL", recipient: "WORK_LOCAL", type: "REPORT", correlationId: mission.message_id, phase: request.phase, point: request.point });
     ledger.accept(report);
 
-    const nextPrompt = await executeTransmission("WORK_NEXT_PROMPT", workThreadId, promptForWorkNextPrompt(report), "WORK_NEXT_PROMPT_FAILED");
+    const nextPrompt = await executeTransmission(
+      "WORK_NEXT_PROMPT",
+      workThreadId,
+      promptForWorkNextPrompt(report),
+      "WORK_NEXT_PROMPT_FAILED",
+      createMessageOutputSchema({
+        sessionId,
+        sequence: 3,
+        sender: "WORK_LOCAL",
+        recipient: "CODEX_LOCAL",
+        type: "NEXT_PROMPT",
+        correlationId: report.message_id,
+        phase: request.phase,
+        point: request.point,
+      }),
+    );
     assertExpected(nextPrompt, { sessionId, sequence: 3, sender: "WORK_LOCAL", recipient: "CODEX_LOCAL", type: "NEXT_PROMPT", correlationId: report.message_id, phase: request.phase, point: request.point });
     ledger.accept(nextPrompt);
     if (nextPrompt.type === "USER_DECISION_REQUIRED" || nextPrompt.user_action_needed) throw new RelayFailure("USER_DECISION_REQUIRED");

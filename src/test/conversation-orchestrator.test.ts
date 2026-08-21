@@ -57,6 +57,7 @@ function relayResult(config: PortableRelayConfig, sessionId: string, userActionN
       transmissions: 3,
       completedTransmissions: 3,
       stoppedBeforeSecondCodexMission: true,
+      requiresUserDecision: false,
       cleanupFailures: [],
       cleanupErrors: [],
     },

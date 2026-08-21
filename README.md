@@ -8,7 +8,7 @@ ChatCOM is a reusable local relay for structured communication between a Work re
 
 The reusable core has been separated from FitMyLife into its own project. Its configuration, message contract, routing, cleanup, bounded diagnostics, Codex SDK adapter, App Server fallback, and synthetic tests are available.
 
-ChatCOM `1.0.0-rc.2` is the release candidate for the bounded local relay. It
+ChatCOM `1.0.0-rc.3` is the release candidate for the bounded local relay. It
 adds a strict shared TypeScript/MCP message contract, propagated and bounded
 host cancellation, validated relay-session coherence, and a multi-platform CI
 matrix to the v0.3.0 STDIO MCP bridge.
@@ -21,7 +21,7 @@ The candidate passes 83 deterministic tests, build, typecheck, configuration
 validation, package dry-run, and a production dependency audit. CI validates
 the same gate on Ubuntu, Windows, and macOS.
 
-## ChatCOM Desktop 1.0.0-rc.2
+## ChatCOM Desktop 1.0.0-rc.3
 
 The Windows desktop candidate is a local supervised GUI for the `WORK_LOCAL`
 to `CODEX_LOCAL` read-only workflow. It guides project selection and the phase,
@@ -183,9 +183,48 @@ npm run verify
 `npm run verify` also runs the production dependency audit and package dry-run.
 The diagnostic commands can contact a real Codex runtime. They must not be executed as part of ordinary unit tests or without explicit authorization.
 
-`1.0.0-rc.2` is not a formal release. Creating a tag, GitHub Release, or npm
+`1.0.0-rc.3` is not a formal release. Creating a tag, GitHub Release, or npm
 publication requires separate explicit authorization. See
 [`RELEASING.md`](RELEASING.md) for the gated release procedure.
+
+## Desktop 1.0.0-rc.3
+
+The Desktop app provides static, offline translations for `fr-FR`, `en-US`,
+`zh-CN` (Simplified Chinese), and `ru-RU` (Russian). The first launch follows
+the Windows locale when supported; otherwise it uses French. The language can
+be changed immediately in Settings and is stored in the versioned Electron
+preferences file.
+
+Settings include System/Light/Dark themes, normal/maximized/fullscreen window
+mode, Small/Normal/Large text, reduced motion, automatic timeline scrolling,
+and safe reset. `F11` toggles fullscreen and `Escape` leaves it. Preferences
+contain no mission, message content, diagnostics, tokens, thread IDs, or user
+responses. RC.2 preferences are migrated and invalid values return to safe
+defaults.
+
+Every configuration field explains whether it is Required, Recommended, or
+Optional, gives a beginner-friendly explanation and example, and reports
+validation errors next to the field. Start remains disabled until the form and
+the read-only no-model preflight are valid.
+
+The Windows installer is `ChatCOM-Desktop-1.0.0-rc.3-Setup.exe`. It is an
+unsigned user install, does not modify PATH, does not configure MCP, and does
+not start a relay automatically. Download only the GitHub Actions artifact
+named `chatcom-desktop-1.0.0-rc.3-windows-x64`; it contains the installer,
+`SHA256SUMS.txt`, and `desktop-build-manifest.json`. This is a synthetic build
+and packaging result, not a real WORK ↔ Codex proof.
+
+### zh-CN user notes
+
+Select 简体中文 in Settings. Labels, beginner help, validation messages,
+preflight, timeline, decisions, reset and export feedback update immediately.
+The technical route names and safety code `READ_ONLY` remain unchanged.
+
+### ru-RU user notes
+
+Select Русский in Settings. The same guided fields, explanations, validation,
+preflight, timeline, decision, reset and export flows are available in Russian.
+The technical route names and safety code `READ_ONLY` remain unchanged.
 
 ## Visual Studio Code workflow
 

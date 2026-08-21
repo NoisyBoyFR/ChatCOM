@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { AppServerClientError, type SafeTurnDiagnostic } from "./app-server-client.js";
-import { createMessage, createMessageOutputSchema, MAX_ROUTE_BYTES, MessageContractError, MessageLedger, MESSAGE_OUTPUT_SCHEMA, parseMessageText, type MessageEnvelope } from "./message-contract.js";
+import { createDecisionAwareMessageOutputSchema, createMessage, createMessageOutputSchema, MAX_ROUTE_BYTES, MessageContractError, MessageLedger, MESSAGE_OUTPUT_SCHEMA, parseMessageText, type MessageEnvelope } from "./message-contract.js";
 
 export const DEFAULT_WORK_LOCAL_INSTRUCTIONS = "You are WORK_LOCAL, a local review role distinct from the current user conversation. Do not change files, act as the user, or invent user decisions. Return exactly one JSON message envelope and no markdown.";
 export const DEFAULT_CODEX_LOCAL_INSTRUCTIONS = "You are CODEX_LOCAL, a local technical role. Stay read-only, do not change files, and do not invent user authority. Return exactly one JSON message envelope and no markdown.";
@@ -38,6 +38,7 @@ export interface RelayResult {
   transmissions: number;
   completedTransmissions: number;
   stoppedBeforeSecondCodexMission: boolean;
+  requiresUserDecision: boolean;
   cleanupFailures: string[];
   cleanupErrors: string[];
 }
@@ -196,21 +197,20 @@ export async function runLocalRelay(agent: RelayAgent, relayRequest: LocalRelayR
       workThreadId,
       promptForWorkNextPrompt(report),
       "WORK_NEXT_PROMPT_FAILED",
-      createMessageOutputSchema({
+      createDecisionAwareMessageOutputSchema({
         sessionId,
         sequence: 3,
         sender: "WORK_LOCAL",
-        recipient: "CODEX_LOCAL",
-        type: "NEXT_PROMPT",
         correlationId: report.message_id,
         phase: request.phase,
         point: request.point,
       }),
     );
-    assertExpected(nextPrompt, { sessionId, sequence: 3, sender: "WORK_LOCAL", recipient: "CODEX_LOCAL", type: "NEXT_PROMPT", correlationId: report.message_id, phase: request.phase, point: request.point });
+    const isNormalNextPrompt = nextPrompt.type === "NEXT_PROMPT" && nextPrompt.sender === "WORK_LOCAL" && nextPrompt.recipient === "CODEX_LOCAL" && !nextPrompt.user_action_needed;
+    const isUserDecision = nextPrompt.type === "USER_DECISION_REQUIRED" && nextPrompt.sender === "WORK_LOCAL" && nextPrompt.recipient === "USER" && nextPrompt.user_action_needed;
+    if (!isNormalNextPrompt && !isUserDecision) throw new RelayFailure("UNEXPECTED_MESSAGE_ROUTE");
+    if (nextPrompt.session_id !== sessionId || nextPrompt.sequence !== 3 || nextPrompt.correlation_id !== report.message_id || nextPrompt.phase !== request.phase || nextPrompt.point !== request.point) throw new RelayFailure("UNEXPECTED_MESSAGE_ROUTE");
     ledger.accept(nextPrompt);
-    if (nextPrompt.type === "USER_DECISION_REQUIRED" || nextPrompt.user_action_needed) throw new RelayFailure("USER_DECISION_REQUIRED");
-
     result = {
       sessionId,
       threadIds: [workThreadId, codexThreadId],
@@ -221,6 +221,7 @@ export async function runLocalRelay(agent: RelayAgent, relayRequest: LocalRelayR
       transmissions: 3,
       completedTransmissions,
       stoppedBeforeSecondCodexMission: true,
+      requiresUserDecision: isUserDecision,
       cleanupFailures,
       cleanupErrors,
     };

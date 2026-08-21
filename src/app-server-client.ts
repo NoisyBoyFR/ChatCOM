@@ -13,6 +13,15 @@ export interface JsonLinePeer {
   terminate?(): void;
 }
 
+export const SAFE_SDK_STAGES = ["LAUNCH", "THREAD_CREATION", "TURN_START", "STREAM_ACTIVE", "TERMINAL_ABSENT", "TERMINAL_COMPLETED", "TERMINAL_FAILED"] as const;
+export type SafeSdkStage = (typeof SAFE_SDK_STAGES)[number];
+export const SAFE_SDK_LAST_STAGES = ["NONE", "THREAD_CREATION", "TURN_START", "TERMINAL_COMPLETED", "TERMINAL_FAILED"] as const;
+export type SafeSdkLastStage = (typeof SAFE_SDK_LAST_STAGES)[number];
+export const SAFE_SDK_TERMINALS = ["ABSENT", "COMPLETED", "FAILED"] as const;
+export type SafeSdkTerminal = (typeof SAFE_SDK_TERMINALS)[number];
+export const SAFE_SDK_FAILURE_CATEGORIES = ["AUTH_REQUIRED", "ACCESS_DENIED", "RATE_LIMITED", "QUOTA_EXCEEDED", "NETWORK_UNAVAILABLE", "CONFIG_INVALID", "OUTPUT_SCHEMA_REJECTED", "MODEL_UNAVAILABLE", "RUNTIME_FAILED", "UNKNOWN"] as const;
+export type SafeSdkFailureCategory = (typeof SAFE_SDK_FAILURE_CATEGORIES)[number];
+
 export interface SafeTurnDiagnostic {
   method?: string;
   category?: string;
@@ -23,8 +32,13 @@ export interface SafeTurnDiagnostic {
   retryCategoryCounts?: Record<string, number>;
   finalStatus?: string;
   interruptionError?: string;
-  sdkStage?: string;
-  sdkLastStage?: string;
+  sdkStage?: SafeSdkStage;
+  sdkLastStage?: SafeSdkLastStage;
+  terminal?: SafeSdkTerminal;
+  threadStarted?: boolean;
+  turnStarted?: boolean;
+  streamClosed?: boolean;
+  failureCategory?: SafeSdkFailureCategory;
 }
 
 export class AppServerClientError extends Error {

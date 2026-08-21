@@ -59,7 +59,7 @@ test("runs three automatic transmissions and stops before the second Codex missi
   assert.equal(result.messages[2].type, "NEXT_PROMPT");
   assert.deepEqual(agent.turns.map((turn) => turn.threadId), ["work-thread", "codex-thread", "work-thread"]);
   assert.deepEqual(agent.deletes, ["codex-thread", "work-thread"]);
-  const schemas = agent.turns.map(({ outputSchema }) => outputSchema as { properties: Record<string, { const?: unknown }> });
+  const schemas = agent.turns.map(({ outputSchema }) => outputSchema as { properties: Record<string, { const?: unknown }>; anyOf?: readonly { properties: Record<string, { const?: unknown }> }[] });
   assert.equal(schemas.length, 3);
   assert.equal(schemas[0].properties.version.const, "1.0");
   assert.equal(schemas[0].properties.session_id.const, sessionId);
@@ -73,9 +73,11 @@ test("runs three automatic transmissions and stops before the second Codex missi
   assert.equal(schemas[1].properties.recipient.const, "WORK_LOCAL");
   assert.equal(schemas[1].properties.type.const, "REPORT");
   assert.equal(schemas[1].properties.correlation_id.const, messages[0].message_id);
-  assert.equal(schemas[2].properties.sequence.const, 3);
-  assert.equal(schemas[2].properties.type.const, "NEXT_PROMPT");
-  assert.equal(schemas[2].properties.correlation_id.const, messages[1].message_id);
+  const normalNextSchema = schemas[2].anyOf?.[0];
+  assert.ok(normalNextSchema);
+  assert.equal(normalNextSchema.properties.sequence.const, 3);
+  assert.equal(normalNextSchema.properties.type.const, "NEXT_PROMPT");
+  assert.equal(normalNextSchema.properties.correlation_id.const, messages[1].message_id);
   assert.notDeepEqual(schemas[0], schemas[1]);
   assert.notDeepEqual(schemas[1], schemas[2]);
 });

@@ -3,6 +3,7 @@ import { RelayFailure } from "../local-relay.js";
 import { runPortableRelay, type PortableRelayRunResult } from "../portable-relay.js";
 import type { MessageEnvelope } from "../message-contract.js";
 import type { PortableRelayConfig } from "../relay-config.js";
+import type { SafeTurnDiagnostic } from "../app-server-client.js";
 
 export const CONVERSATION_DEFAULT_MAX_CYCLES = 5;
 export const CONVERSATION_MAX_CYCLES = 20;
@@ -41,6 +42,13 @@ export interface ConversationDiagnostic {
   relayStage?: string;
   completedTransmissions: number;
   cleanup: Exclude<ConversationCleanup, "UNKNOWN">;
+  sdkStage?: SafeTurnDiagnostic["sdkStage"];
+  sdkLastStage?: SafeTurnDiagnostic["sdkLastStage"];
+  terminal?: SafeTurnDiagnostic["terminal"];
+  threadStarted?: boolean;
+  turnStarted?: boolean;
+  streamClosed?: boolean;
+  failureCategory?: SafeTurnDiagnostic["failureCategory"];
 }
 
 export interface ConversationSnapshot {
@@ -51,6 +59,7 @@ export interface ConversationSnapshot {
   elapsedMs: number;
   currentSessionId?: string;
   cleanup: ConversationCleanup;
+  decisionPrompt?: string;
   lastDiagnostic?: ConversationDiagnostic;
 }
 
@@ -84,11 +93,19 @@ function boundedInteger(value: unknown, fallback: number, maximum: number, code:
 
 function diagnosticFrom(error: unknown, fallbackCode: string): ConversationDiagnostic {
   const relayError = error instanceof RelayFailure ? error : undefined;
+  const sdk = relayError?.primaryDiagnostic;
   return {
     code: relayError?.code ?? fallbackCode,
     ...(relayError?.relayStage === undefined ? {} : { relayStage: relayError.relayStage }),
     completedTransmissions: relayError?.completedTransmissions ?? 0,
     cleanup: relayError && relayError.cleanupErrors.length === 0 ? "CONFIRMED" : "NOT_CONFIRMED",
+    ...(sdk?.sdkStage === undefined ? {} : { sdkStage: sdk.sdkStage }),
+    ...(sdk?.sdkLastStage === undefined ? {} : { sdkLastStage: sdk.sdkLastStage }),
+    ...(sdk?.terminal === undefined ? {} : { terminal: sdk.terminal }),
+    ...(sdk?.threadStarted === undefined ? {} : { threadStarted: sdk.threadStarted }),
+    ...(sdk?.turnStarted === undefined ? {} : { turnStarted: sdk.turnStarted }),
+    ...(sdk?.streamClosed === undefined ? {} : { streamClosed: sdk.streamClosed }),
+    ...(sdk?.failureCategory === undefined ? {} : { failureCategory: sdk.failureCategory }),
   };
 }
 
@@ -120,6 +137,7 @@ export class ConversationOrchestrator {
   private cleanup: ConversationCleanup = "UNKNOWN";
   private lastDiagnostic: ConversationDiagnostic | undefined;
   private nextMission: string | undefined;
+  private decisionPrompt: string | undefined;
   private pauseRequested = false;
   private stopRequested = false;
   private controller: AbortController | undefined;
@@ -144,6 +162,7 @@ export class ConversationOrchestrator {
     this.cleanup = "UNKNOWN";
     this.lastDiagnostic = undefined;
     this.nextMission = this.input.mission;
+    this.decisionPrompt = undefined;
     this.state = "READY";
     this.emitSnapshot();
     return this.snapshot();
@@ -158,6 +177,7 @@ export class ConversationOrchestrator {
       elapsedMs: this.startedAt === 0 ? 0 : Date.now() - this.startedAt,
       ...(this.currentSessionId === undefined ? {} : { currentSessionId: this.currentSessionId }),
       cleanup: this.cleanup,
+      ...(this.decisionPrompt === undefined ? {} : { decisionPrompt: this.decisionPrompt }),
       ...(this.lastDiagnostic === undefined ? {} : { lastDiagnostic: this.lastDiagnostic }),
     };
   }
@@ -188,6 +208,16 @@ export class ConversationOrchestrator {
   async resume(): Promise<void> {
     if (this.state !== "PAUSED") throw new RelayFailure("RESUME_STATE_INVALID");
     await this.start();
+  }
+
+  submitDecision(response: string): ConversationSnapshot {
+    const bounded = boundedString(response, "DECISION_RESPONSE_INVALID", 16_384);
+    if (this.state !== "USER_DECISION_REQUIRED" || this.decisionPrompt === undefined) throw new RelayFailure("DECISION_STATE_INVALID");
+    this.nextMission = bounded;
+    this.decisionPrompt = undefined;
+    this.state = "PAUSED";
+    this.emitSnapshot();
+    return this.snapshot();
   }
 
   async stop(): Promise<void> {
@@ -263,6 +293,7 @@ export class ConversationOrchestrator {
         this.emit({ kind: "cycle_completed", cycle: this.cycle, cleanup: "CONFIRMED", nextPrompt: nextPrompt.content });
         this.emitSnapshot();
         if (nextPrompt.user_action_needed || nextPrompt.type === "USER_DECISION_REQUIRED") {
+          this.decisionPrompt = nextPrompt.content;
           this.state = "USER_DECISION_REQUIRED";
           this.emitSnapshot();
           return;

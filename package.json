@@ -1,6 +1,6 @@
 {
   "name": "chatcom",
-  "version": "1.0.0-rc.2",
+  "version": "1.0.0-rc.3",
   "private": true,
   "author": "ChatCOM",
   "description": "Reusable local communication relay between Work and Codex.",
@@ -47,7 +47,7 @@
     "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "npm run clean && npm run build && node --test dist/test/app-server-client.test.js dist/test/message-contract.test.js dist/test/local-relay.test.js dist/test/differential-diagnostic.test.js dist/test/codex-sdk-relay.test.js dist/test/portable-relay.test.js dist/test/mcp-server.test.js dist/test/conversation-orchestrator.test.js scripts/differential-diagnostic.test.mjs scripts/desktop-security.test.mjs",
+    "test": "npm run clean && npm run build && node --test dist/test/app-server-client.test.js dist/test/message-contract.test.js dist/test/local-relay.test.js dist/test/differential-diagnostic.test.js dist/test/codex-sdk-relay.test.js dist/test/portable-relay.test.js dist/test/mcp-server.test.js dist/test/conversation-orchestrator.test.js dist/test/desktop-proof-readiness.test.js dist/test/desktop-rc3.test.js scripts/differential-diagnostic.test.mjs scripts/desktop-security.test.mjs",
     "validate-config": "npm run build && node dist/portable-cli.js validate --config relay.config.example.json",
     "audit": "npm audit --omit=dev --audit-level=high",
     "desktop:typecheck": "tsc -p tsconfig.desktop.json --noEmit",

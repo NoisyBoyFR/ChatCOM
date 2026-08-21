@@ -6,13 +6,20 @@ authorization.
 
 ## Desktop candidate
 
-For `1.0.0-rc.2`, the Windows desktop artifact is a validation artifact, not a
+For `1.0.0-rc.3`, the Windows desktop artifact is a validation artifact, not a
 formal publication. Build it with `npm run desktop:make` and verify it with
 `scripts/verify-desktop-package.mjs`. The Squirrel installer is unsigned, does
 not require elevation, and must not be uploaded as a GitHub Release unless a
 separate publication authorization names the exact tag and release. The
 packaged desktop runtime must keep the read-only project boundary, disabled
 approvals, bounded diagnostics, and the three-transmission route.
+
+The RC.3 GitHub Actions artifact is named
+`chatcom-desktop-1.0.0-rc.3-windows-x64` and contains the versioned installer,
+`SHA256SUMS.txt`, and `desktop-build-manifest.json`. The manifest records only
+the version, Windows platform, x64 architecture, installer filename, size,
+SHA-256, Codex runtime version, and `UNSIGNED` signature state. This artifact
+is not a real WORK ↔ Codex proof.
 
 ## Release gate
 

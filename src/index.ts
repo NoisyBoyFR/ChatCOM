@@ -7,7 +7,7 @@ export {
   validateLocalRelayRequest,
 } from "./local-relay.js";
 export type { LocalRelayRequest, LocalRelayRunOptions, RelayAgent, RelayResult, RelayStage } from "./local-relay.js";
-export { createMessageOutputSchema, MAX_CONTENT_BYTES, MAX_ROUTE_BYTES, MESSAGE_DATE_PATTERN, MESSAGE_OUTPUT_SCHEMA, MESSAGE_UUID_PATTERN, parseMessageText, validateMessage, validateRelayMessages } from "./message-contract.js";
+export { createDecisionAwareMessageOutputSchema, createMessageOutputSchema, MAX_CONTENT_BYTES, MAX_ROUTE_BYTES, MESSAGE_DATE_PATTERN, MESSAGE_OUTPUT_SCHEMA, MESSAGE_UUID_PATTERN, parseMessageText, validateMessage, validateRelayMessages } from "./message-contract.js";
 export type { MessageEnvelope } from "./message-contract.js";
 export { RELAY_CONFIG_VERSION, RelayConfigError, loadRelayConfig, parseRelayConfig } from "./relay-config.js";
 export type { PortableRelayConfig } from "./relay-config.js";
@@ -31,3 +31,9 @@ export type {
   ConversationSnapshot,
   ConversationState,
 } from "./conversation/orchestrator.js";
+export { runDesktopPreflight } from "./desktop/preflight.js";
+export type { PreflightCommandResult, PreflightDependencies, PreflightResult, PreflightStatus, RuntimeInspection } from "./desktop/preflight.js";
+export { DICTIONARIES, SUPPORTED_LOCALES, detectLocale, isSupportedLocale, normalizeLocale, translate } from "./desktop/i18n.js";
+export type { I18nKey, Locale } from "./desktop/i18n.js";
+export { DEFAULT_PREFERENCES, PREFERENCES_SCHEMA_VERSION, migratePreferences, parsePreferences, preferencesForStorage } from "./desktop/preferences.js";
+export type { DesktopPreferences, TextSize, Theme, WindowMode } from "./desktop/preferences.js";

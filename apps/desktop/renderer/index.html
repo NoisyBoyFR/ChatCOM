@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="fr">
+<html lang="fr-FR">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -8,60 +8,25 @@
     <title>ChatCOM Desktop</title>
   </head>
   <body>
-    <header class="topbar">
-      <div>
-        <p class="eyebrow">CHATCOM DESKTOP</p>
-        <h1>Supervision locale WORK ↔ CODEX</h1>
-        <p class="subtle">WORK_LOCAL est un rôle local de contrôle, distinct de cette conversation.</p>
-      </div>
-      <div id="state-badge" class="badge">IDLE</div>
-    </header>
+    <header class="topbar"><div><p class="eyebrow" data-i18n="eyebrow"></p><h1 data-i18n="headline"></h1><p class="subtle" data-i18n="subtitle"></p></div><div class="topbar-actions"><button id="open-settings" class="ghost" data-i18n="settings"></button><div id="state-badge" class="badge">IDLE</div></div></header>
     <main class="layout">
       <section class="panel configuration" aria-labelledby="configuration-title">
-        <h2 id="configuration-title">Configuration</h2>
-        <label>Projet supervisé <span class="required">*</span></label>
-        <div class="path-row">
-          <input id="project-root" type="text" readonly placeholder="Choisissez un dossier" />
-          <button id="choose-project" class="secondary">Choisir le projet</button>
-        </div>
-        <label for="phase">Phase</label>
-        <input id="phase" type="text" value="DESKTOP" maxlength="256" />
-        <label for="point">Point</label>
-        <input id="point" type="text" value="SUPERVISION" maxlength="256" />
-        <label for="mission">Mission</label>
-        <textarea id="mission" rows="5" maxlength="16384" placeholder="Décrivez une mission en lecture seule"></textarea>
-        <div class="split">
-          <div><label for="max-cycles">Cycles maximum</label><input id="max-cycles" type="number" min="1" max="20" value="5" /></div>
-          <div><label for="cycle-timeout">Délai/cycle (ms)</label><input id="cycle-timeout" type="number" min="1" value="600000" /></div>
-        </div>
-        <p id="configuration-status" class="hint">Choisissez un projet puis préparez la mission.</p>
-        <div class="actions">
-          <button id="start" class="primary">Démarrer</button>
-          <button id="pause" class="secondary">Pause</button>
-          <button id="resume" class="secondary">Reprendre</button>
-          <button id="stop" class="danger">Arrêter</button>
-        </div>
-        <div class="actions secondary-actions">
-          <button id="copy-diagnostic" class="ghost">Copier le diagnostic borné</button>
-          <button id="export-report" class="ghost">Exporter le compte rendu</button>
-          <button id="reset-preferences" class="ghost">Réinitialiser les préférences</button>
-        </div>
+        <h2 id="configuration-title" data-i18n="configuration"></h2>
+        <div class="field"><label for="project-root"><span data-i18n="project"></span> <span class="required" data-i18n="required"></span></label><input id="project-root" type="text" readonly data-i18n-placeholder="projectPlaceholder" aria-required="true" /><button id="choose-project" class="secondary" data-i18n="chooseProject"></button><p class="help" data-i18n="projectBeginner"></p><p id="project-error" class="field-error" role="alert"></p></div>
+        <div class="field"><label for="phase"><span data-i18n="phase"></span> <span class="required" data-i18n="required"></span></label><input id="phase" type="text" maxlength="256" required aria-required="true" /><p class="help" data-i18n="phaseHelp"></p><p id="phase-error" class="field-error" role="alert"></p></div>
+        <div class="field"><label for="point"><span data-i18n="point"></span> <span class="required" data-i18n="required"></span></label><input id="point" type="text" maxlength="256" required aria-required="true" /><p class="help" data-i18n="pointHelp"></p><p id="point-error" class="field-error" role="alert"></p></div>
+        <div class="field"><label for="mission"><span data-i18n="mission"></span> <span class="required" data-i18n="required"></span></label><textarea id="mission" rows="5" maxlength="16384" required aria-required="true" data-i18n-placeholder="missionPlaceholder"></textarea><p class="help" data-i18n="missionHelp"></p><p id="mission-error" class="field-error" role="alert"></p><p id="mission-count" class="help"></p></div>
+        <div class="split"><div class="field"><label for="max-cycles"><span data-i18n="maxCycles"></span> <span class="required" data-i18n="required"></span></label><input id="max-cycles" type="number" min="1" max="20" value="5" required aria-required="true" /><p class="help" data-i18n="cycleHelp"></p><p id="cycles-error" class="field-error" role="alert"></p></div><div class="field"><label for="cycle-timeout"><span data-i18n="cycleTimeout"></span> <span data-i18n="recommended"></span></label><input id="cycle-timeout" type="number" min="1" value="600000" /><p class="help" data-i18n="cycleTimeoutHelp"></p><p id="cycle-timeout-error" class="field-error" role="alert"></p></div></div>
+        <div class="field"><label for="global-timeout"><span data-i18n="globalTimeout"></span> <span data-i18n="advanced"></span></label><input id="global-timeout" type="number" min="1" value="3600000" /><p class="help" data-i18n="globalTimeoutHelp"></p><p id="global-timeout-error" class="field-error" role="alert"></p></div>
+        <p id="configuration-status" class="hint" role="status"></p>
+        <section class="preflight" aria-labelledby="preflight-title"><h3 id="preflight-title" data-i18n="preflight"></h3><dl class="preflight-facts"><div><dt data-i18n="runtime"></dt><dd id="runtime-status">UNKNOWN</dd></div><div><dt data-i18n="authentication"></dt><dd id="auth-status">UNKNOWN</dd></div><div><dt data-i18n="project"></dt><dd id="project-status">UNKNOWN</dd></div><div><dt data-i18n="security"></dt><dd id="security-status" data-i18n="readOnly"></dd></div></dl><button id="verify-config" class="secondary" data-i18n="verifyConfig"></button></section>
+        <section id="decision-panel" class="decision-panel" hidden aria-labelledby="decision-title"><h3 id="decision-title" data-i18n="decisionTitle"></h3><p id="decision-question" class="hint"></p><label for="decision-response" data-i18n="decisionResponse"></label><textarea id="decision-response" rows="4" maxlength="16384" data-i18n-placeholder="decisionPlaceholder"></textarea><button id="submit-decision" class="primary" data-i18n="submitDecision"></button></section>
+        <div class="actions"><button id="start" class="primary" data-i18n="start"></button><button id="pause" class="secondary" data-i18n="pause"></button><button id="resume" class="secondary" data-i18n="resume"></button><button id="stop" class="danger" data-i18n="stop"></button></div><div class="actions secondary-actions"><button id="copy-diagnostic" class="ghost" data-i18n="copyDiagnostic"></button><button id="export-report" class="ghost" data-i18n="exportReport"></button><button id="reset-preferences" class="ghost" data-i18n="resetPreferences"></button></div>
       </section>
-      <section class="panel overview" aria-labelledby="overview-title">
-        <h2 id="overview-title">État du relais</h2>
-        <dl class="facts">
-          <div><dt>Conversation</dt><dd id="conversation-id">—</dd></div>
-          <div><dt>Cycle</dt><dd id="cycle">0 / 5</dd></div>
-          <div><dt>Temps écoulé</dt><dd id="elapsed">0 s</dd></div>
-          <div><dt>Nettoyage</dt><dd id="cleanup">UNKNOWN</dd></div>
-          <div><dt>Session</dt><dd id="session-id">—</dd></div>
-        </dl>
-        <div class="notice"><strong>Lecture seule permanente.</strong><br />ChatCOM ne modifie pas le projet supervisé et n’ajoute pas de configuration MCP automatiquement.</div>
-        <h2 class="timeline-title">Chronologie</h2>
-        <div id="timeline" class="timeline" aria-live="polite" aria-label="Chronologie des transmissions"></div>
-      </section>
+      <section class="panel overview" aria-labelledby="overview-title"><h2 id="overview-title" data-i18n="relayState"></h2><dl class="facts"><div><dt data-i18n="conversation"></dt><dd id="conversation-id">—</dd></div><div><dt data-i18n="cycle"></dt><dd id="cycle">0 / 5</dd></div><div><dt data-i18n="elapsed"></dt><dd id="elapsed">0 s</dd></div><div><dt data-i18n="cleanup"></dt><dd id="cleanup">UNKNOWN</dd></div><div><dt data-i18n="session"></dt><dd id="session-id">—</dd></div></dl><div class="notice" data-i18n="notice"></div><h2 class="timeline-title" data-i18n="timeline"></h2><div id="timeline" class="timeline" aria-live="polite"></div></section>
     </main>
-    <footer><span id="footer-status">Prêt.</span><span>ChatCOM Desktop 1.0.0-rc.2</span></footer>
+    <section id="settings-panel" class="settings-panel" hidden aria-labelledby="settings-title"><div class="settings-card"><div class="settings-heading"><h2 id="settings-title" data-i18n="settings"></h2><button id="close-settings" class="ghost" data-i18n="close" aria-label="Close">×</button></div><div class="settings-grid"><label for="language" data-i18n="language"></label><select id="language"><option value="fr-FR">Français</option><option value="en-US">English</option><option value="zh-CN">简体中文</option><option value="ru-RU">Русский</option></select><label for="theme" data-i18n="theme"></label><select id="theme"><option value="system" data-i18n="themeSystem"></option><option value="light" data-i18n="themeLight"></option><option value="dark" data-i18n="themeDark"></option></select><label for="window-mode" data-i18n="windowMode"></label><select id="window-mode"><option value="normal" data-i18n="windowNormal"></option><option value="maximized" data-i18n="windowMaximized"></option><option value="fullscreen" data-i18n="windowFullscreen"></option></select><label for="text-size" data-i18n="textSize"></label><select id="text-size"><option value="small" data-i18n="textSmall"></option><option value="normal" data-i18n="textNormal"></option><option value="large" data-i18n="textLarge"></option></select><label class="check"><input id="reduce-motion" type="checkbox" /><span data-i18n="reduceMotion"></span></label><label class="check"><input id="auto-scroll" type="checkbox" /><span data-i18n="autoScroll"></span></label></div><p id="settings-status" class="hint" role="status"></p></div></section>
+    <footer><span id="footer-status"></span><span>ChatCOM Desktop 1.0.0-rc.3</span></footer>
     <script type="module" src="./renderer.ts"></script>
   </body>
 </html>

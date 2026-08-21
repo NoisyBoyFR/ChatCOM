@@ -1,9 +1,12 @@
 {
   "name": "chatcom",
-  "version": "1.0.0-rc.1",
+  "version": "1.0.0-rc.2",
   "private": true,
+  "author": "ChatCOM",
   "description": "Reusable local communication relay between Work and Codex.",
   "type": "module",
+  "main": ".vite/build/main.cjs",
+  "productName": "ChatCOM Desktop",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
@@ -32,16 +35,28 @@
     "scripts/sdk-diagnostic.mjs",
     "scripts/mcp-diagnostic.mjs",
     "scripts/install-windows.ps1",
+    "apps",
+    "forge.config.cjs",
+    "vite.main.config.ts",
+    "vite.preload.config.ts",
+    "vite.renderer.config.ts",
+    "tsconfig.desktop.json",
     "relay.config.example.json"
   ],
   "scripts": {
     "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "npm run clean && npm run build && node --test dist/test/app-server-client.test.js dist/test/message-contract.test.js dist/test/local-relay.test.js dist/test/differential-diagnostic.test.js dist/test/codex-sdk-relay.test.js dist/test/portable-relay.test.js dist/test/mcp-server.test.js scripts/differential-diagnostic.test.mjs",
+    "test": "npm run clean && npm run build && node --test dist/test/app-server-client.test.js dist/test/message-contract.test.js dist/test/local-relay.test.js dist/test/differential-diagnostic.test.js dist/test/codex-sdk-relay.test.js dist/test/portable-relay.test.js dist/test/mcp-server.test.js dist/test/conversation-orchestrator.test.js scripts/differential-diagnostic.test.mjs scripts/desktop-security.test.mjs",
     "validate-config": "npm run build && node dist/portable-cli.js validate --config relay.config.example.json",
     "audit": "npm audit --omit=dev --audit-level=high",
-    "verify": "npm run build && npm run typecheck && npm test && npm run validate-config && npm run audit && npm pack --dry-run",
+    "desktop:typecheck": "tsc -p tsconfig.desktop.json --noEmit",
+    "desktop:test": "npm run desktop:typecheck && node --test dist/test/conversation-orchestrator.test.js",
+    "desktop:dev": "electron-forge start",
+    "desktop:build": "npm run desktop:typecheck && electron-forge package",
+    "desktop:package": "electron-forge package",
+    "desktop:make": "electron-forge make --platform=win32 --arch=x64",
+    "verify": "npm run build && npm run typecheck && npm run desktop:typecheck && npm test && npm run validate-config && npm run audit && npm pack --dry-run",
     "install:windows": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\install-windows.ps1 -AddToUserPath",
     "diagnose:app-server": "node scripts/differential-diagnostic.mjs",
     "diagnose:sdk": "node scripts/sdk-diagnostic.mjs",
@@ -58,7 +73,12 @@
     "zod": "4.4.3"
   },
   "devDependencies": {
+    "@electron-forge/cli": "7.11.2",
+    "@electron-forge/maker-squirrel": "7.11.2",
+    "@electron-forge/plugin-vite": "7.11.2",
     "@types/node": "^22.0.0",
-    "typescript": "^7.0.2"
+    "electron": "43.4.1",
+    "typescript": "7.0.2",
+    "vite": "6.4.1"
   }
 }

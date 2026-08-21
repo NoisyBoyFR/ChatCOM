@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'; frame-ancestors 'none';" />
+    <link rel="stylesheet" href="./style.css" />
+    <title>ChatCOM Desktop</title>
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">CHATCOM DESKTOP</p>
+        <h1>Supervision locale WORK ↔ CODEX</h1>
+        <p class="subtle">WORK_LOCAL est un rôle local de contrôle, distinct de cette conversation.</p>
+      </div>
+      <div id="state-badge" class="badge">IDLE</div>
+    </header>
+    <main class="layout">
+      <section class="panel configuration" aria-labelledby="configuration-title">
+        <h2 id="configuration-title">Configuration</h2>
+        <label>Projet supervisé <span class="required">*</span></label>
+        <div class="path-row">
+          <input id="project-root" type="text" readonly placeholder="Choisissez un dossier" />
+          <button id="choose-project" class="secondary">Choisir le projet</button>
+        </div>
+        <label for="phase">Phase</label>
+        <input id="phase" type="text" value="DESKTOP" maxlength="256" />
+        <label for="point">Point</label>
+        <input id="point" type="text" value="SUPERVISION" maxlength="256" />
+        <label for="mission">Mission</label>
+        <textarea id="mission" rows="5" maxlength="16384" placeholder="Décrivez une mission en lecture seule"></textarea>
+        <div class="split">
+          <div><label for="max-cycles">Cycles maximum</label><input id="max-cycles" type="number" min="1" max="20" value="5" /></div>
+          <div><label for="cycle-timeout">Délai/cycle (ms)</label><input id="cycle-timeout" type="number" min="1" value="600000" /></div>
+        </div>
+        <p id="configuration-status" class="hint">Choisissez un projet puis préparez la mission.</p>
+        <div class="actions">
+          <button id="start" class="primary">Démarrer</button>
+          <button id="pause" class="secondary">Pause</button>
+          <button id="resume" class="secondary">Reprendre</button>
+          <button id="stop" class="danger">Arrêter</button>
+        </div>
+        <div class="actions secondary-actions">
+          <button id="copy-diagnostic" class="ghost">Copier le diagnostic borné</button>
+          <button id="export-report" class="ghost">Exporter le compte rendu</button>
+          <button id="reset-preferences" class="ghost">Réinitialiser les préférences</button>
+        </div>
+      </section>
+      <section class="panel overview" aria-labelledby="overview-title">
+        <h2 id="overview-title">État du relais</h2>
+        <dl class="facts">
+          <div><dt>Conversation</dt><dd id="conversation-id">—</dd></div>
+          <div><dt>Cycle</dt><dd id="cycle">0 / 5</dd></div>
+          <div><dt>Temps écoulé</dt><dd id="elapsed">0 s</dd></div>
+          <div><dt>Nettoyage</dt><dd id="cleanup">UNKNOWN</dd></div>
+          <div><dt>Session</dt><dd id="session-id">—</dd></div>
+        </dl>
+        <div class="notice"><strong>Lecture seule permanente.</strong><br />ChatCOM ne modifie pas le projet supervisé et n’ajoute pas de configuration MCP automatiquement.</div>
+        <h2 class="timeline-title">Chronologie</h2>
+        <div id="timeline" class="timeline" aria-live="polite" aria-label="Chronologie des transmissions"></div>
+      </section>
+    </main>
+    <footer><span id="footer-status">Prêt.</span><span>ChatCOM Desktop 1.0.0-rc.2</span></footer>
+    <script type="module" src="./renderer.ts"></script>
+  </body>
+</html>

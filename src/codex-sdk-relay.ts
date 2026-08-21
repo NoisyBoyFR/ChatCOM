@@ -107,7 +107,14 @@ export async function resolveBundledCodexRuntime(): Promise<string> {
   if (!target) throw new AppServerClientError("SDK_RUNTIME_NOT_FOUND");
   const [packageName, targetTriple, executableName] = target;
   try {
-    const packageJsonPath = moduleRequire.resolve(`${packageName}/package.json`);
+    let packageJsonPath: string;
+    try {
+      packageJsonPath = moduleRequire.resolve(`${packageName}/package.json`);
+    } catch {
+      const resourcesPath = (process as NodeJS.Process & { resourcesPath?: string }).resourcesPath;
+      if (resourcesPath === undefined || !packageName.startsWith("@openai/")) throw new Error("runtime-package");
+      packageJsonPath = join(resourcesPath, "@openai", packageName.slice("@openai/".length), "package.json");
+    }
     const packageJson = JSON.parse(await readFile(packageJsonPath, "utf8")) as { version?: unknown };
     if (typeof packageJson.version !== "string" || !(packageJson.version === EXPECTED_RUNTIME_VERSION || packageJson.version.startsWith(`${EXPECTED_RUNTIME_VERSION}-`))) throw new Error("runtime-version");
     return await canonicalExecutable(join(dirname(packageJsonPath), "vendor", targetTriple, "bin", executableName));

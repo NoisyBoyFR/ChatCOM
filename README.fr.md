@@ -8,7 +8,7 @@ ChatCOM est un relay local réutilisable pour une communication structurée entr
 
 Le noyau réutilisable a été séparé de FitMyLife dans un projet autonome. La configuration, le contrat de messages, le routage, le nettoyage, les diagnostics bornés, l’adaptateur Codex SDK, le fallback App Server et les tests synthétiques sont disponibles.
 
-ChatCOM `1.0.0-rc.1` est la candidate de publication du relay local borné. Elle
+ChatCOM `1.0.0-rc.2` est la candidate de publication du relay local borné. Elle
 ajoute au pont MCP STDIO v0.3.0 un contrat de messages TypeScript/MCP strict et
 partagé, une annulation hôte propagée et bornée, la cohérence validée des
 sessions du relay et une matrice CI multi-plateforme.
@@ -22,6 +22,37 @@ La candidate réussit 83 tests déterministes, le build, le typecheck, la
 validation de configuration, le contrôle d’archive à blanc et l’audit des
 dépendances de production. La CI exécute le même garde-fou sur Ubuntu, Windows
 et macOS.
+
+## ChatCOM Desktop 1.0.0-rc.2
+
+La candidate Windows fournit une interface locale supervisee pour le workflow
+en lecture seule `WORK_LOCAL` vers `CODEX_LOCAL`. Elle guide le choix du projet,
+de la phase, du point, de la mission et de la limite de cycles, puis affiche la
+timeline bornee `MISSION -> REPORT -> NEXT_PROMPT` pour chaque cycle. Pause,
+reprise, arret, diagnostics bornes et export JSON sont disponibles dans la
+fenetre.
+
+Le `ChatCOM Setup.exe` non signe est produit par l artefact CI Windows. Il ne
+demande pas de droits administrateur, ne modifie pas le PATH et n ajoute pas la
+configuration MCP a Codex. Les preferences restent dans les donnees utilisateur
+Electron ; elles peuvent etre reinitialisees dans l interface ou supprimees
+avec la desinstallation Windows. Le projet supervise n est jamais modifie par
+le relay desktop et le renderer ne peut pas executer de commandes arbitraires.
+Une preuve Codex reelle n est pas implicite dans l installateur ni dans les tests
+synthetiques.
+
+Commandes de developpement :
+
+```powershell
+npm run desktop:dev
+npm run desktop:typecheck
+npm run desktop:make
+```
+
+`desktop:make` cree l installateur Squirrel Windows dans `out-desktop`. Le
+runtime Codex natif est inclus dans le paquet Windows ; un compte Codex
+authentifie reste necessaire pour executer un relay. La CLI et le pont MCP
+restent disponibles separement.
 
 ## Modèle de sécurité
 
@@ -156,7 +187,7 @@ npm run verify
 
 Les commandes de diagnostic peuvent contacter un runtime Codex réel. Elles ne doivent pas être exécutées par les tests ordinaires ni sans autorisation explicite.
 
-`1.0.0-rc.1` n’est pas une publication formelle. La création d’un tag, d’une
+`1.0.0-rc.2` n’est pas une publication formelle. La création d’un tag, d’une
 GitHub Release ou d’une publication npm exige une autorisation explicite séparée.
 La procédure contrôlée est décrite dans [`RELEASING.md`](RELEASING.md).
 

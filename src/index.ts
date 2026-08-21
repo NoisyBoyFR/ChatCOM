@@ -13,3 +13,21 @@ export { RELAY_CONFIG_VERSION, RelayConfigError, loadRelayConfig, parseRelayConf
 export type { PortableRelayConfig } from "./relay-config.js";
 export { runPortableRelay } from "./portable-relay.js";
 export type { PortableRelayRunOptions, PortableRelayRunResult } from "./portable-relay.js";
+export {
+  CONVERSATION_DEFAULT_CYCLE_TIMEOUT_MS,
+  CONVERSATION_DEFAULT_GLOBAL_TIMEOUT_MS,
+  CONVERSATION_DEFAULT_MAX_CYCLES,
+  CONVERSATION_MAX_CYCLES,
+  ConversationOrchestrator,
+  validateConversationInput,
+} from "./conversation/orchestrator.js";
+export type {
+  ConversationCleanup,
+  ConversationDiagnostic,
+  ConversationEvent,
+  ConversationInput,
+  ConversationRelayResult,
+  ConversationRelay,
+  ConversationSnapshot,
+  ConversationState,
+} from "./conversation/orchestrator.js";

@@ -31,6 +31,7 @@
     "scripts/differential-diagnostic.mjs",
     "scripts/sdk-diagnostic.mjs",
     "scripts/mcp-diagnostic.mjs",
+    "scripts/install-windows.ps1",
     "relay.config.example.json"
   ],
   "scripts": {
@@ -41,6 +42,7 @@
     "validate-config": "npm run build && node dist/portable-cli.js validate --config relay.config.example.json",
     "audit": "npm audit --omit=dev --audit-level=high",
     "verify": "npm run build && npm run typecheck && npm test && npm run validate-config && npm run audit && npm pack --dry-run",
+    "install:windows": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\install-windows.ps1 -AddToUserPath",
     "diagnose:app-server": "node scripts/differential-diagnostic.mjs",
     "diagnose:sdk": "node scripts/sdk-diagnostic.mjs",
     "diagnose:mcp": "node scripts/mcp-diagnostic.mjs",

@@ -51,6 +51,28 @@ npm install
 npm run build
 ```
 
+### Simple Windows installer
+
+From the repository root or a prepared archive (`dist` must already be built),
+install ChatCOM for the current user:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\install-windows.ps1 -AddToUserPath
+```
+
+The installer uses `%LOCALAPPDATA%\ChatCOM`, requires no administrator
+privileges, does not run dependency npm scripts, and starts neither Codex nor
+the relay. An Internet connection may be required to fetch dependencies. The
+installation provides `chatcom` and `chatcom-mcp`, but does not automatically
+add MCP configuration to Codex. Open a new terminal after updating PATH, then
+validate the install:
+
+```powershell
+chatcom validate --config .\relay.config.example.json
+```
+
+Preview the operation without changing anything with `-WhatIf`.
+
 ## Configure
 
 Copy `relay.config.example.json` and set the project root and routing fields:

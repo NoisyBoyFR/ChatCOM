@@ -110,8 +110,9 @@ const french = {
   accessibilityRequired: "Les champs marqués Obligatoire doivent être complétés.",
 } as const;
 
-export type I18nKey = keyof typeof french;
-type Dictionary = Record<I18nKey, string>;
+type DictionaryKey = keyof typeof french;
+export type I18nKey = DictionaryKey | "settingsSave" | "settingsCancel" | "settingsSaveFailed" | "autoUpdate" | "updateChannel" | "updateStable" | "updatePreview" | "updateStatus" | "checkUpdates" | "restartUpdate";
+type Dictionary = Record<DictionaryKey, string>;
 
 const english: Dictionary = {
   cancel: "Cancel", stopAndQuit: "Stop and quit", closeWhileRunning: "ChatCOM must finish cancellation and cleanup before quitting.",
@@ -133,6 +134,20 @@ const russian: Dictionary = {
 
 export const DICTIONARIES = { "fr-FR": french, "en-US": english, "zh-CN": chinese, "ru-RU": russian } as const satisfies Record<Locale, Dictionary>;
 
+const settingsTranslations: Record<Locale, Record<"settingsSave" | "settingsCancel" | "settingsSaveFailed", string>> = {
+  "fr-FR": { settingsSave: "Sauvegarder", settingsCancel: "Annuler", settingsSaveFailed: "Impossible d’enregistrer les paramètres." },
+  "en-US": { settingsSave: "Save", settingsCancel: "Cancel", settingsSaveFailed: "Settings could not be saved." },
+  "zh-CN": { settingsSave: "\u4fdd\u5b58", settingsCancel: "\u53d6\u6d88", settingsSaveFailed: "\u65e0\u6cd5\u4fdd\u5b58\u8bbe\u7f6e\u3002" },
+  "ru-RU": { settingsSave: "\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c", settingsCancel: "\u041e\u0442\u043c\u0435\u043d\u0430", settingsSaveFailed: "\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u0441\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c \u043d\u0430с\u0442ро\u0439ки." },
+};
+
+const updateTranslations: Record<Locale, Record<"autoUpdate" | "updateChannel" | "updateStable" | "updatePreview" | "updateStatus" | "checkUpdates" | "restartUpdate", string>> = {
+  "fr-FR": { autoUpdate: "Mises à jour automatiques", updateChannel: "Canal de mise à jour", updateStable: "Stable", updatePreview: "Préversion", updateStatus: "État des mises à jour", checkUpdates: "Vérifier maintenant", restartUpdate: "Redémarrer et installer" },
+  "en-US": { autoUpdate: "Automatic updates", updateChannel: "Update channel", updateStable: "Stable", updatePreview: "Preview", updateStatus: "Update status", checkUpdates: "Check now", restartUpdate: "Restart and install" },
+  "zh-CN": { autoUpdate: "\u81ea\u52a8\u66f4\u65b0", updateChannel: "\u66f4\u65b0\u6e20\u9053", updateStable: "\u7a33\u5b9a\u7248", updatePreview: "\u9884\u89c8\u7248", updateStatus: "\u66f4\u65b0\u72b6\u6001", checkUpdates: "\u7acb\u5373\u68c0\u67e5", restartUpdate: "\u91cd\u65b0\u542f\u52a8\u5e76\u5b89\u88c5" },
+  "ru-RU": { autoUpdate: "\u0410\u0432\u0442\u043e\u043c\u0430\u0442\u0438\u0447\u0435\u0441\u043a\u0438\u0435 \u043e\u0431\u043d\u043e\u0432\u043b\u0435\u043d\u0438\u044f", updateChannel: "\u041a\u0430\u043d\u0430\u043b \u043e\u0431\u043d\u043e\u0432\u043b\u0435\u043d\u0438\u0439", updateStable: "\u0421\u0442\u0430\u0431\u0438\u043b\u044c\u043d\u0430\u044f", updatePreview: "\u041f\u0440\u0435\u0434\u0432\u0430\u0440\u0438\u0442\u0435\u043b\u044c\u043d\u0430\u044f", updateStatus: "\u0421\u043e\u0441\u0442\u043e\u044f\u043d\u0438\u0435 \u043e\u0431\u043d\u043e\u0432\u043b\u0435\u043d\u0438\u0439", checkUpdates: "\u041f\u0440\u043e\u0432\u0435\u0440\u0438\u0442\u044c \u0441\u0435\u0439\u0447\u0430\u0441", restartUpdate: "\u041f\u0435\u0440\u0435\u0437\u0430\u043f\u0443\u0441\u0442\u0438\u0442\u044c \u0438 \u0443\u0441\u0442\u0430\u043d\u043e\u0432\u0438\u0442\u044c" },
+};
+
 export function isSupportedLocale(value: unknown): value is Locale { return typeof value === "string" && (SUPPORTED_LOCALES as readonly string[]).includes(value); }
 export function normalizeLocale(value: unknown): Locale | undefined {
   if (isSupportedLocale(value)) return value;
@@ -142,4 +157,11 @@ export function normalizeLocale(value: unknown): Locale | undefined {
 }
 export function detectLocale(value: string | undefined): Locale { return normalizeLocale(value) ?? "fr-FR"; }
 export function dictionary(locale: Locale): Dictionary { return DICTIONARIES[locale]; }
-export function translate(locale: Locale, key: I18nKey, params: Record<string, string | number> = {}): string { return dictionary(locale)[key].replace(/\{(\w+)\}/gu, (_, name: string) => String(params[name] ?? `{${name}}`)); }
+export function translate(locale: Locale, key: I18nKey, params: Record<string, string | number> = {}): string {
+  const value = key in settingsTranslations[locale]
+    ? settingsTranslations[locale][key as "settingsSave" | "settingsCancel" | "settingsSaveFailed"]
+    : key in updateTranslations[locale]
+      ? updateTranslations[locale][key as "autoUpdate" | "updateChannel" | "updateStable" | "updatePreview" | "updateStatus" | "checkUpdates" | "restartUpdate"]
+    : dictionary(locale)[key as DictionaryKey];
+  return value.replace(/\{(\w+)\}/gu, (_, name: string) => String(params[name] ?? `{${name}}`));
+}

@@ -1,19 +1,24 @@
-import { app, BrowserWindow, clipboard, dialog, ipcMain, session } from "electron";
+import { app, autoUpdater, BrowserWindow, clipboard, dialog, ipcMain, session } from "electron";
+import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
-import { readFile, realpath, stat, unlink, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { mkdtemp, readdir, readFile, realpath, rm, stat, unlink, writeFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
+import { tmpdir } from "node:os";
 import { ConversationOrchestrator, type ConversationSnapshot } from "../../../src/conversation/orchestrator.js";
 import { RelayFailure } from "../../../src/local-relay.js";
 import { runDesktopPreflight, type PreflightResult } from "../../../src/desktop/preflight.js";
 import { migratePreferences, preferencesForStorage, DEFAULT_PREFERENCES, type DesktopPreferences } from "../../../src/desktop/preferences.js";
 import { translate } from "../../../src/desktop/i18n.js";
 import { DESKTOP_IPC_CHANNELS, type DesktopConfigureInput } from "../shared/ipc.js";
+import { CHATCOM_UPDATE_REPOSITORY, UpdaterController, evaluateUpdatePolicy, inspectWindowsAuthenticode, verifyArtifactHash, type ElectronUpdaterAdapter, type UpdateSnapshot } from "../../../src/desktop/updater.js";
 
 const orchestrator = new ConversationOrchestrator();
 let mainWindow: BrowserWindow | undefined;
 let closing = false;
 let selectedProjectRoot: string | undefined;
 let currentPreferences: DesktopPreferences = DEFAULT_PREFERENCES;
+let updater: UpdaterController | undefined;
+let updateSnapshot: UpdateSnapshot = { status: "DISABLED", currentVersion: "unknown", channel: "preview", readyToInstall: false, publicUpdatesEnabled: false, errorCode: "NOT_INITIALIZED" };
 let currentPreflight: PreflightResult = {
   runtime: { status: "UNKNOWN" },
   authentication: { status: "UNKNOWN" },
@@ -51,7 +56,7 @@ async function loadPreferences(): Promise<DesktopPreferences> {
     const parsed: unknown = JSON.parse(await readFile(await preferencesPath(), "utf8"));
     return migratePreferences(parsed, app.getLocale());
   } catch {
-    return migratePreferences(undefined, app.getLocale());
+    return migratePreferences(undefined, app.getLocale(), app.getVersion());
   }
 }
 
@@ -83,8 +88,76 @@ async function validateProject(path: string): Promise<string> {
   }
 }
 
+function sendUpdate(snapshot: UpdateSnapshot): void {
+  updateSnapshot = snapshot;
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(DESKTOP_IPC_CHANNELS.updateEvent, snapshot);
+}
+
+async function findPackagedRenderer(): Promise<string | undefined> {
+  const root = join(__dirname, "../renderer", MAIN_WINDOW_VITE_NAME);
+  const pending = [root];
+  while (pending.length > 0) {
+    const current = pending.shift() as string;
+    let entries;
+    try { entries = await readdir(current, { withFileTypes: true }); } catch { continue; }
+    for (const entry of entries) {
+      const candidate = join(current, entry.name);
+      if (entry.isFile() && entry.name === "index.html") return candidate;
+      if (entry.isDirectory()) pending.push(candidate);
+    }
+  }
+  return undefined;
+}
+
 function sendEvent(event: import("../../../src/conversation/orchestrator.js").ConversationEvent): void {
   if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(DESKTOP_IPC_CHANNELS.event, event);
+  const snapshot = orchestrator.snapshot();
+  const activity = ["RUNNING", "PAUSE_REQUESTED", "STOPPING"].includes(snapshot.state) ? snapshot.state as "RUNNING" | "PAUSE_REQUESTED" | "STOPPING" : "IDLE";
+  updater?.setRelayState(activity, snapshot.cleanup === "CONFIRMED");
+}
+
+function handleSquirrelStartup(): boolean {
+  if (process.platform !== "win32") return false;
+  const event = process.argv.find((value) => value.startsWith("--squirrel-"));
+  if (!event || event === "--squirrel-firstrun") return false;
+  const updateExe = join(dirname(process.execPath), "Update.exe");
+  const args = event === "--squirrel-uninstall" ? ["--removeShortcut", "ChatCOM.exe"] : ["--createShortcut", "ChatCOM.exe"];
+  if (["--squirrel-install", "--squirrel-updated", "--squirrel-uninstall"].includes(event) && existsSync(updateExe)) spawn(updateExe, args, { detached: true, windowsHide: true, stdio: "ignore" }).unref();
+  app.quit();
+  return true;
+}
+
+async function loadUpdateManifest(updateURL: string, expected: { currentVersion: string; channel: "stable" | "preview"; releaseVersion: string }): Promise<unknown> {
+  const manifestURL = expected.channel === "stable"
+    ? `https://github.com/${CHATCOM_UPDATE_REPOSITORY}/releases/download/v${encodeURIComponent(expected.releaseVersion)}/desktop-build-manifest.json`
+    : new URL("desktop-build-manifest.json", updateURL).href;
+  const response = await fetch(manifestURL, { signal: AbortSignal.timeout(10_000) });
+  if (!response.ok) throw new Error("MANIFEST_FETCH_FAILED");
+  const manifest = await response.json() as { artifacts?: Array<{ kind?: unknown; filename?: unknown; sha256?: unknown }> };
+  const fullPackage = manifest.artifacts?.find((artifact) => artifact.kind === "squirrel-full");
+  if (!fullPackage || typeof fullPackage.filename !== "string" || typeof fullPackage.sha256 !== "string") throw new Error("MANIFEST_ARTIFACT_INVALID");
+  const packageURL = expected.channel === "stable"
+    ? `https://github.com/${CHATCOM_UPDATE_REPOSITORY}/releases/download/v${encodeURIComponent(expected.releaseVersion)}/${encodeURIComponent(fullPackage.filename)}`
+    : new URL(fullPackage.filename, updateURL).href;
+  const packageResponse = await fetch(packageURL, { signal: AbortSignal.timeout(30_000) });
+  if (!packageResponse.ok) throw new Error("PACKAGE_FETCH_FAILED");
+  const temporaryDirectory = await mkdtemp(join(tmpdir(), "chatcom-update-"));
+  const temporaryPackage = join(temporaryDirectory, "update-full.nupkg");
+  try {
+    await writeFile(temporaryPackage, Buffer.from(await packageResponse.arrayBuffer()));
+    if (!await verifyArtifactHash(temporaryPackage, fullPackage.sha256)) throw new Error("PACKAGE_HASH_INVALID");
+  } finally { await rm(temporaryDirectory, { recursive: true, force: true }); }
+  return manifest;
+}
+
+async function configureUpdater(): Promise<void> {
+  const version = app.getVersion();
+  const proof = await inspectWindowsAuthenticode(process.execPath);
+  const policy = evaluateUpdatePolicy({ packaged: app.isPackaged, platform: process.platform, architecture: process.arch, currentVersion: version, channel: currentPreferences.updateChannel, signatureState: proof.signatureState, publisher: proof.publisher, timestamped: proof.timestamped, repository: CHATCOM_UPDATE_REPOSITORY, minimumUpdaterVersion: "1.0.0" });
+  const adapter: ElectronUpdaterAdapter = { setFeedURL: (options) => autoUpdater.setFeedURL(options), checkForUpdates: () => autoUpdater.checkForUpdates(), quitAndInstall: () => autoUpdater.quitAndInstall(), on: (event, listener) => autoUpdater.on(event as never, listener as never), removeListener: (event, listener) => autoUpdater.removeListener(event as never, listener as never) };
+  updater = new UpdaterController({ adapter, currentVersion: version, channel: currentPreferences.updateChannel, policyEnabled: policy.enabled, publicUpdatesEnabled: currentPreferences.autoUpdateEnabled && policy.enabled, loadManifest: loadUpdateManifest, relayState: () => { const snapshot = orchestrator.snapshot(); const activity = ["RUNNING", "PAUSE_REQUESTED", "STOPPING"].includes(snapshot.state) ? snapshot.state as "RUNNING" | "PAUSE_REQUESTED" | "STOPPING" : "IDLE"; return { activity, cleanupConfirmed: snapshot.cleanup === "CONFIRMED" }; }, onChange: sendUpdate });
+  updateSnapshot = updater.snapshot();
+  if (policy.enabled && currentPreferences.autoUpdateEnabled) updater.start();
 }
 
 function registerIpc(): void {
@@ -153,18 +226,25 @@ function registerIpc(): void {
       assertTrustedSender(event);
       if (typeof rawInput !== "object" || rawInput === null || Array.isArray(rawInput)) throw new RelayFailure("IPC_INPUT_INVALID");
       const value = rawInput as Record<string, unknown>;
-      const allowed = ["language", "theme", "windowMode", "textSize", "reduceMotion", "autoScroll"];
+      const allowed = ["language", "theme", "windowMode", "textSize", "reduceMotion", "autoScroll", "autoUpdateEnabled", "updateChannel"];
       if (Object.keys(value).some((key) => !allowed.includes(key))) throw new RelayFailure("IPC_INPUT_INVALID");
       if (Object.prototype.hasOwnProperty.call(value, "language") && typeof value.language !== "string") throw new RelayFailure("IPC_INPUT_INVALID");
       if (Object.prototype.hasOwnProperty.call(value, "theme") && !["system", "light", "dark"].includes(String(value.theme))) throw new RelayFailure("IPC_INPUT_INVALID");
       if (Object.prototype.hasOwnProperty.call(value, "windowMode") && !["normal", "maximized", "fullscreen"].includes(String(value.windowMode))) throw new RelayFailure("IPC_INPUT_INVALID");
       if (Object.prototype.hasOwnProperty.call(value, "textSize") && !["small", "normal", "large"].includes(String(value.textSize))) throw new RelayFailure("IPC_INPUT_INVALID");
       if (["reduceMotion", "autoScroll"].some((key) => Object.prototype.hasOwnProperty.call(value, key) && typeof value[key] !== "boolean")) throw new RelayFailure("IPC_INPUT_INVALID");
-      await savePreferences(migratePreferences({ ...currentPreferences, ...value }, app.getLocale()));
+      if (Object.prototype.hasOwnProperty.call(value, "autoUpdateEnabled") && typeof value.autoUpdateEnabled !== "boolean") throw new RelayFailure("IPC_INPUT_INVALID");
+      if (Object.prototype.hasOwnProperty.call(value, "updateChannel") && !["stable", "preview"].includes(String(value.updateChannel))) throw new RelayFailure("IPC_INPUT_INVALID");
+      await savePreferences(migratePreferences({ ...currentPreferences, ...value }, app.getLocale(), app.getVersion()));
       applyWindowPreferences();
+      updater?.setChannel(currentPreferences.updateChannel);
+      updater?.setEnabled(currentPreferences.autoUpdateEnabled);
       return currentPreferences;
     } catch (error) { throw boundedError(error); }
   });
+  ipcMain.handle(DESKTOP_IPC_CHANNELS.updateState, (event) => { assertTrustedSender(event); return updater?.snapshot() ?? updateSnapshot; });
+  ipcMain.handle(DESKTOP_IPC_CHANNELS.checkForUpdates, async (event) => { assertTrustedSender(event); return updater ? updater.checkNow() : updateSnapshot; });
+  ipcMain.handle(DESKTOP_IPC_CHANNELS.restartAndInstall, (event) => { assertTrustedSender(event); updater?.restartAndInstall(); });
   ipcMain.handle(DESKTOP_IPC_CHANNELS.stop, async (event) => {
     try { assertTrustedSender(event); await orchestrator.stop(); return orchestrator.snapshot(); }
     catch (error) { throw boundedError(error); }
@@ -189,7 +269,7 @@ function registerIpc(): void {
     } catch (error) { throw boundedError(error); }
   });
   ipcMain.handle(DESKTOP_IPC_CHANNELS.resetPreferences, async (event) => {
-    try { assertTrustedSender(event); try { await unlink(await preferencesPath()); } catch { /* absent is already reset */ } currentPreferences = migratePreferences(undefined, app.getLocale()); applyWindowPreferences(); }
+    try { assertTrustedSender(event); try { await unlink(await preferencesPath()); } catch { /* absent is already reset */ } currentPreferences = migratePreferences(undefined, app.getLocale(), app.getVersion()); applyWindowPreferences(); updater?.setChannel(currentPreferences.updateChannel); updater?.setEnabled(currentPreferences.autoUpdateEnabled); }
     catch (error) { throw boundedError(error); }
   });
 }
@@ -234,8 +314,8 @@ async function createWindow(): Promise<void> {
   });
   if (MAIN_WINDOW_VITE_DEV_SERVER_URL) await mainWindow.loadURL(MAIN_WINDOW_VITE_DEV_SERVER_URL);
   else {
-    const rendererPath = join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/apps/desktop/renderer/index.html`);
-    if (!existsSync(rendererPath)) console.error("CHATCOM_DESKTOP kind=FAILURE code=RENDER_FILE_MISSING");
+    const rendererPath = await findPackagedRenderer();
+    if (!rendererPath || !existsSync(rendererPath)) { console.error("CHATCOM_DESKTOP kind=FAILURE code=RENDER_FILE_MISSING renderer=PACKAGED_MAIN_WINDOW"); return; }
     try { await mainWindow.loadFile(rendererPath); }
     catch { console.error("CHATCOM_DESKTOP kind=FAILURE code=RENDER_LOAD_FAILED"); }
   }
@@ -243,13 +323,17 @@ async function createWindow(): Promise<void> {
   mainWindow.show();
 }
 
-app.whenReady().then(async () => {
+app.setAppUserModelId("com.squirrel.chatcom.ChatCOM");
+const squirrelLaunchHandled = handleSquirrelStartup();
+
+if (!squirrelLaunchHandled) app.whenReady().then(async () => {
   session.defaultSession.setPermissionRequestHandler((_webContents, _permission, callback) => callback(false));
   currentPreferences = await loadPreferences();
   selectedProjectRoot = currentPreferences.projectRoot;
   registerIpc();
   orchestrator.subscribe(sendEvent);
   await createWindow();
+  await configureUpdater();
   app.on("activate", () => { if (BrowserWindow.getAllWindows().length === 0) void createWindow(); });
 });
 

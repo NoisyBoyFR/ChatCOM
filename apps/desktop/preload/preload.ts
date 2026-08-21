@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from "electron";
 import { DESKTOP_IPC_CHANNELS, type DesktopApi, type DesktopConfigureInput, type DesktopStateResponse } from "../shared/ipc.js";
 import type { DesktopPreferences } from "../../../src/desktop/preferences.js";
+import type { UpdateSnapshot } from "../../../src/desktop/updater.js";
 import type { ConversationEvent, ConversationSnapshot } from "../../../src/conversation/orchestrator.js";
 import type { PreflightResult } from "../../../src/desktop/preflight.js";
 
@@ -13,7 +14,15 @@ const api: DesktopApi = Object.freeze({
   resume: (): Promise<ConversationSnapshot> => ipcRenderer.invoke(DESKTOP_IPC_CHANNELS.resume),
   submitDecision: (response: string): Promise<ConversationSnapshot> => ipcRenderer.invoke(DESKTOP_IPC_CHANNELS.submitDecision, response),
   preflight: (): Promise<PreflightResult> => ipcRenderer.invoke(DESKTOP_IPC_CHANNELS.preflight),
-  updatePreferences: (input: Partial<Pick<DesktopPreferences, "language" | "theme" | "windowMode" | "textSize" | "reduceMotion" | "autoScroll">>) => ipcRenderer.invoke(DESKTOP_IPC_CHANNELS.updatePreferences, input),
+  updatePreferences: (input: Partial<Pick<DesktopPreferences, "language" | "theme" | "windowMode" | "textSize" | "reduceMotion" | "autoScroll" | "autoUpdateEnabled" | "updateChannel">>) => ipcRenderer.invoke(DESKTOP_IPC_CHANNELS.updatePreferences, input),
+  getUpdateState: (): Promise<UpdateSnapshot> => ipcRenderer.invoke(DESKTOP_IPC_CHANNELS.updateState),
+  checkForUpdates: (): Promise<UpdateSnapshot> => ipcRenderer.invoke(DESKTOP_IPC_CHANNELS.checkForUpdates),
+  restartAndInstall: (): Promise<void> => ipcRenderer.invoke(DESKTOP_IPC_CHANNELS.restartAndInstall),
+  onUpdate: (listener: (snapshot: UpdateSnapshot) => void) => {
+    const wrapped = (_event: Electron.IpcRendererEvent, value: UpdateSnapshot) => listener(value);
+    ipcRenderer.on(DESKTOP_IPC_CHANNELS.updateEvent, wrapped);
+    return () => ipcRenderer.removeListener(DESKTOP_IPC_CHANNELS.updateEvent, wrapped);
+  },
   stop: (): Promise<ConversationSnapshot> => ipcRenderer.invoke(DESKTOP_IPC_CHANNELS.stop),
   copyDiagnostic: () => ipcRenderer.invoke(DESKTOP_IPC_CHANNELS.copyDiagnostic),
   exportReport: () => ipcRenderer.invoke(DESKTOP_IPC_CHANNELS.exportReport),

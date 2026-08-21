@@ -3,6 +3,9 @@ import { randomUUID } from "node:crypto";
 export const MESSAGE_VERSION = "1.0" as const;
 export const MAX_MESSAGE_BYTES = 65_536;
 export const MAX_CONTENT_BYTES = 32_768;
+export const MAX_ROUTE_BYTES = 256;
+export const MESSAGE_UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
+export const MESSAGE_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u;
 
 export const MESSAGE_ROLES = ["WORK_LOCAL", "CODEX_LOCAL", "USER"] as const;
 export type MessageRole = (typeof MESSAGE_ROLES)[number];
@@ -52,7 +55,6 @@ export class MessageContractError extends Error {
   }
 }
 
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 const MESSAGE_KEYS = [
   "version",
   "session_id",
@@ -85,7 +87,12 @@ function assertEnum<T extends readonly string[]>(value: unknown, values: T, code
 }
 
 function assertUuid(value: unknown, code: string): asserts value is string {
-  assert(typeof value === "string" && UUID_PATTERN.test(value), code);
+  assert(typeof value === "string" && MESSAGE_UUID_PATTERN.test(value), code);
+}
+
+function assertDate(value: unknown, code: string): asserts value is string {
+  assert(typeof value === "string" && MESSAGE_DATE_PATTERN.test(value), code);
+  assert(new Date(value).toISOString() === value, code);
 }
 
 function assertRoleCoherence(message: MessageEnvelope): void {
@@ -128,9 +135,11 @@ export function validateMessage(value: unknown): MessageEnvelope {
   assertEnum(value.type, MESSAGE_TYPES, "INVALID_TYPE");
   assert(typeof value.phase === "string" && value.phase.trim().length > 0, "INVALID_PHASE");
   assert(typeof value.point === "string" && value.point.trim().length > 0, "INVALID_POINT");
+  assert(Buffer.byteLength(value.phase, "utf8") <= MAX_ROUTE_BYTES, "PHASE_TOO_LARGE");
+  assert(Buffer.byteLength(value.point, "utf8") <= MAX_ROUTE_BYTES, "POINT_TOO_LARGE");
   assert(typeof value.content === "string" && value.content.trim().length > 0, "EMPTY_CONTENT");
   assert(Buffer.byteLength(value.content, "utf8") <= MAX_CONTENT_BYTES, "CONTENT_TOO_LARGE");
-  assert(typeof value.created_at === "string" && Number.isFinite(Date.parse(value.created_at)), "INVALID_DATE");
+  assertDate(value.created_at, "INVALID_DATE");
   assertEnum(value.delivery_status, DELIVERY_STATUSES, "INVALID_DELIVERY_STATUS");
   assert(typeof value.user_action_needed === "boolean", "INVALID_USER_ACTION_FLAG");
 
@@ -149,6 +158,25 @@ export function parseMessageText(text: string): MessageEnvelope {
     throw new MessageContractError("INVALID_MESSAGE_JSON");
   }
   return validateMessage(value);
+}
+
+export function validateRelayMessages(value: readonly MessageEnvelope[]): readonly [MessageEnvelope, MessageEnvelope, MessageEnvelope] {
+  assert(value.length === 3, "INVALID_RELAY_MESSAGES");
+  const ledger = new MessageLedger();
+  const messages = value.map((message) => ledger.accept(message));
+  const [mission, report, nextPrompt] = messages;
+  assert(
+      mission.type === "MISSION" && mission.sender === "WORK_LOCAL" && mission.recipient === "CODEX_LOCAL" &&
+      report.type === "REPORT" && report.sender === "CODEX_LOCAL" && report.recipient === "WORK_LOCAL" &&
+      nextPrompt.type === "NEXT_PROMPT" && nextPrompt.sender === "WORK_LOCAL" && nextPrompt.recipient === "CODEX_LOCAL" &&
+      mission.correlation_id === mission.session_id &&
+      report.correlation_id === mission.message_id && nextPrompt.correlation_id === report.message_id &&
+      mission.session_id === report.session_id && report.session_id === nextPrompt.session_id &&
+      mission.phase === report.phase && report.phase === nextPrompt.phase &&
+      mission.point === report.point && report.point === nextPrompt.point,
+    "INVALID_RELAY_ROUTE",
+  );
+  return messages as [MessageEnvelope, MessageEnvelope, MessageEnvelope];
 }
 
 export function createMessage(
@@ -194,17 +222,17 @@ export const MESSAGE_OUTPUT_SCHEMA = {
   required: [...MESSAGE_KEYS],
   properties: {
     version: { type: "string", enum: [MESSAGE_VERSION] },
-    session_id: { type: "string" },
-    message_id: { type: "string" },
-    correlation_id: { type: "string" },
+    session_id: { type: "string", pattern: MESSAGE_UUID_PATTERN.source },
+    message_id: { type: "string", pattern: MESSAGE_UUID_PATTERN.source },
+    correlation_id: { type: "string", pattern: MESSAGE_UUID_PATTERN.source },
     sequence: { type: "integer", minimum: 1 },
     sender: { enum: [...MESSAGE_ROLES] },
     recipient: { enum: [...MESSAGE_ROLES] },
     type: { enum: [...MESSAGE_TYPES] },
-    phase: { type: "string" },
-    point: { type: "string" },
-    content: { type: "string" },
-    created_at: { type: "string" },
+    phase: { type: "string", minLength: 1, description: "UTF-8 length is bounded by the relay route contract." },
+    point: { type: "string", minLength: 1, description: "UTF-8 length is bounded by the relay route contract." },
+    content: { type: "string", minLength: 1, description: "UTF-8 byte length is bounded by MAX_CONTENT_BYTES at runtime." },
+    created_at: { type: "string", pattern: MESSAGE_DATE_PATTERN.source },
     delivery_status: { enum: [...DELIVERY_STATUSES] },
     user_action_needed: { type: "boolean" },
   },

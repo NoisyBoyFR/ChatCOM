@@ -8,18 +8,20 @@ ChatCOM est un relay local réutilisable pour une communication structurée entr
 
 Le noyau réutilisable a été séparé de FitMyLife dans un projet autonome. La configuration, le contrat de messages, le routage, le nettoyage, les diagnostics bornés, l’adaptateur Codex SDK, le fallback App Server et les tests synthétiques sont disponibles.
 
-ChatCOM v0.3.0 ajoute un pont MCP STDIO local au relay opérationnel borné. Work
-peut valider une configuration et invoquer un relay explicitement autorisé via
-des outils MCP structurés, sans faire transiter le contenu du modèle dans les
-diagnostics terminaux. Le cycle de vie
-Codex SDK authentifié, le relay complet Work ↔ Codex à trois transmissions et
-le fallback App Server ont réussi avec un nettoyage confirmé. La preuve MCP et
-les preuves runtime antérieures sont consignées dans
+ChatCOM `1.0.0-rc.1` est la candidate de publication du relay local borné. Elle
+ajoute au pont MCP STDIO v0.3.0 un contrat de messages TypeScript/MCP strict et
+partagé, une annulation hôte propagée et bornée, la cohérence validée des
+sessions du relay et une matrice CI multi-plateforme.
+
+La candidate a terminé un relay réel authentifié MCP STDIO → ChatCOM → Codex →
+Work avec exactement trois transmissions et un nettoyage confirmé. La preuve
+bornée et les preuves runtime antérieures sont consignées dans
 [`.ai/PROOF.md`](.ai/PROOF.md).
 
-La baseline opérationnelle réussit 71 tests déterministes, le build, le
-typecheck, la validation de configuration, le contrôle d’archive à blanc et
-l’audit des dépendances de production.
+La candidate réussit 83 tests déterministes, le build, le typecheck, la
+validation de configuration, le contrôle d’archive à blanc et l’audit des
+dépendances de production. La CI exécute le même garde-fou sur Ubuntu, Windows
+et macOS.
 
 ## Modèle de sécurité
 
@@ -86,10 +88,16 @@ const config = await loadRelayConfig("./relay.config.json");
 const result = await runPortableRelay(config, { timeoutMs: 600_000 });
 
 const [mission, report, nextPrompt] = result.relay.messages;
+const cancellation = new AbortController();
+const cancellable = runPortableRelay(config, { signal: cancellation.signal });
+// Appeler cancellation.abort() depuis l’hôte pour arrêter la mission.
 // Consommer les contenus validés par programme sans les imprimer dans les diagnostics bornés.
 ```
 
 ## Pont MCP
+
+Si l’hôte MCP annule une requête, le signal d’annulation est propagé au flux
+Codex et le nettoyage doit rester confirmé avant la fin de l’appel.
 
 Compiler ChatCOM, puis copier
 [`.codex/config.toml.example`](.codex/config.toml.example) dans une configuration
@@ -120,10 +128,15 @@ npm run build
 npm run typecheck
 npm test
 npm run validate-config
+npm run audit
 npm run verify
 ```
 
 Les commandes de diagnostic peuvent contacter un runtime Codex réel. Elles ne doivent pas être exécutées par les tests ordinaires ni sans autorisation explicite.
+
+`1.0.0-rc.1` n’est pas une publication formelle. La création d’un tag, d’une
+GitHub Release ou d’une publication npm exige une autorisation explicite séparée.
+La procédure contrôlée est décrite dans [`RELEASING.md`](RELEASING.md).
 
 ## Workflow Visual Studio Code
 

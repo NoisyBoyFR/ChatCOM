@@ -88,14 +88,14 @@ COMPTE RENDU OBLIGATOIRE À WORK
 Ne rends pas une succession de micro-rapports. Rends la main à WORK uniquement
 quand la directive est terminée ou réellement bloquée.
 
-PREMIÈRE DIRECTIVE — REPRISE APRÈS PUBLICATION V0.3.0
+PREMIÈRE DIRECTIVE — INSPECTION POST-FUSION DE LA CANDIDATE V1
 
 Effectue une inspection indépendante et strictement read-only de la baseline
-ChatCOM publiée sur `main`.
+ChatCOM `1.0.0-rc.1` fusionnée sur `main`.
 
 Vérifie :
 
-- que HEAD correspond à la version 0.3.0 publiée ;
+- que `package.json` et `package-lock.json` portent `1.0.0-rc.1` ;
 - que le working tree est propre ;
 - que la CI GitHub du commit publié réussit ;
 - que le serveur MCP STDIO expose uniquement `chatcom_validate_config` et
@@ -103,11 +103,12 @@ Vérifie :
 - que l'API et MCP restituent les trois enveloppes validées à leur appelant sans
   les exposer dans le diagnostic terminal ou le texte MCP ordinaire ;
 - que les preuves réelles SDK, relais à trois transmissions et fallback App
-  Server, ainsi que la preuve MCP, sont correctement documentées ;
-- que la documentation et l'état durable ne se contredisent pas.
+  Server, ainsi que la preuve MCP de la candidate, sont correctement documentées ;
+- que la matrice CI couvre Ubuntu, Windows et macOS ;
+- que la documentation et l’état durable ne se contredisent pas.
 
-Propose ensuite un unique prochain jalon prioritaire pour poursuivre ChatCOM,
-avec objectif, valeur, périmètre, exclusions, risques et critères de clôture.
+Établis ensuite si la candidate est éligible à une publication formelle v1.0,
+sans créer de tag, release ni publication npm.
 
 AUTORISATIONS DE CETTE PREMIÈRE DIRECTIVE
 
@@ -117,5 +118,5 @@ AUTORISATIONS DE CETTE PREMIÈRE DIRECTIVE
 - Commit, push, branche, PR, merge ou réécriture Git : interdits.
 
 Termine par :
-INSPECTION POST-PUBLICATION TERMINÉE — COMPTE RENDU À WORK.
+INSPECTION POST-FUSION TERMINÉE — COMPTE RENDU À WORK.
 ```

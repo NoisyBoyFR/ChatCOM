@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { test } from "node:test";
 import type { AppServerCloseResult } from "../app-server-client.js";
+import { AppServerClientError } from "../app-server-client.js";
 import type { CodexSdkRelayClient } from "../codex-sdk-relay.js";
 import { runPortableCli } from "../portable-cli.js";
 import { runPortableRelay } from "../portable-relay.js";
@@ -27,15 +28,24 @@ function outputs(phase: string, point: string): string[] {
 class FakePortableClient implements CodexSdkRelayClient {
   readonly starts: { instructions: string; cwd: string }[] = [];
   readonly turns: { threadId: string; prompt: string; schema: unknown }[] = [];
+  readonly signals: (AbortSignal | undefined)[] = [];
   readonly deletes: string[] = [];
   initialized = false;
   closed = false;
   private nextId = 1;
 
-  constructor(private readonly responses: string[]) {}
+  constructor(private readonly responses: string[], private readonly cancelOnCall?: number) {}
   async initialize(): Promise<void> { this.initialized = true; }
   async startThread(instructions: string, cwd: string): Promise<string> { this.starts.push({ instructions, cwd }); return `thread-${this.nextId++}`; }
-  async runTurn(threadId: string, prompt: string, outputSchema?: unknown): Promise<string> { this.turns.push({ threadId, prompt, schema: outputSchema }); return this.responses.shift() ?? "{}"; }
+  async runTurn(threadId: string, prompt: string, outputSchema?: unknown, signal?: AbortSignal): Promise<string> {
+    this.turns.push({ threadId, prompt, schema: outputSchema });
+    this.signals.push(signal);
+    if (this.cancelOnCall === this.turns.length) {
+      await new Promise<void>((resolve) => signal?.addEventListener("abort", () => resolve(), { once: true }));
+      throw new AppServerClientError("SDK_TURN_CANCELLED", { method: "codex-sdk", finalStatus: "interrupted" });
+    }
+    return this.responses.shift() ?? "{}";
+  }
   async deleteThread(threadId: string): Promise<void> { this.deletes.push(threadId); }
   async close(): Promise<AppServerCloseResult> { this.closed = true; return { exited: true, forced: false }; }
 }
@@ -79,6 +89,23 @@ test("runs the portable relay for independent project routes with structured out
     assert.equal(client.turns.every(({ prompt }) => prompt.includes(point)), true);
     assert.deepEqual(client.deletes, ["thread-2", "thread-1"]);
   }
+});
+
+test("portable relay propagates cancellation and always closes its client", async () => {
+  const client = new FakePortableClient(outputs("PORTABLE-PHASE", "PORTABLE-POINT"), 1);
+  const controller = new AbortController();
+  const pending = runPortableRelay(config("C:\\portable\\workspace"), { timeoutMs: 10_000, sessionId, signal: controller.signal, createClient: async () => client });
+  setTimeout(() => controller.abort(), 10);
+  await assert.rejects(pending, (error) => {
+    const failure = error as { code?: string; relayStage?: string; completedTransmissions?: number };
+    assert.equal(failure.code, "SDK_TURN_CANCELLED");
+    assert.equal(failure.relayStage, "WORK_MISSION");
+    assert.equal(failure.completedTransmissions, 0);
+    return true;
+  });
+  assert.equal(client.signals[0], controller.signal);
+  assert.equal(client.closed, true);
+  assert.deepEqual(client.deletes, ["thread-2", "thread-1"]);
 });
 
 test("portable CLI validates and runs through injected dependencies", async () => {

@@ -33,6 +33,10 @@ const KNOWN_OMITTED_STREAM_EVENTS = new Set(["item.started", "item.updated", "it
 
 type SdkThread = Pick<Thread, "runStreamed"> & { id: string | null };
 type SdkClient = Pick<Codex, "startThread">;
+type SdkStreamed = Awaited<ReturnType<SdkThread["runStreamed"]>>;
+type StreamStartOutcome =
+  | { kind: "started"; streamed: SdkStreamed }
+  | { kind: "start-error"; error: unknown };
 
 export class CodexSdkRelayError extends AppServerClientError {
   constructor(code: string, readonly sdkStage: SdkRunStage, readonly sdkLastStage: SdkLifecycleStage, readonly streamProof?: SdkStreamProof, diagnostic?: SafeTurnDiagnostic) {
@@ -42,6 +46,7 @@ export class CodexSdkRelayError extends AppServerClientError {
 
 export interface CodexSdkRelayOptions {
   timeoutMs?: number;
+  streamCleanupTimeoutMs?: number;
   environment?: Record<string, string>;
   codexPathOverride?: string;
   codex?: SdkClient;
@@ -51,7 +56,7 @@ export interface CodexSdkRelayOptions {
 export interface CodexSdkRelayClient {
   initialize(): Promise<void>;
   startThread(instructions: string, cwd: string): Promise<string>;
-  runTurn(threadId: string, prompt: string, outputSchema?: unknown): Promise<string>;
+  runTurn(threadId: string, prompt: string, outputSchema?: unknown, signal?: AbortSignal): Promise<string>;
   deleteThread(threadId: string): Promise<void>;
   close(): Promise<AppServerCloseResult>;
 }
@@ -143,6 +148,33 @@ function recordStreamEvent(proof: SdkStreamProof, type: string): void {
   if (boundedType === "UNKNOWN") proof.unknownEventCount = Math.min(16, proof.unknownEventCount + 1);
 }
 
+async function closeStreamWithin(streamed: SdkStreamed, timeoutMs: number): Promise<boolean> {
+  const closePromise = Promise.resolve().then(async () => {
+    const iterator = streamed.events[Symbol.asyncIterator]();
+    if (typeof iterator.return !== "function") return false;
+    await iterator.return(undefined);
+    return true;
+  }).catch(() => false);
+  return waitForBoolean(closePromise, timeoutMs);
+}
+
+async function waitForBoolean(operation: Promise<boolean>, timeoutMs: number): Promise<boolean> {
+  let timeoutHandle: NodeJS.Timeout | undefined;
+  const timeoutPromise = new Promise<boolean>((resolve) => {
+    timeoutHandle = setTimeout(() => resolve(false), timeoutMs);
+  });
+  try {
+    return await Promise.race([operation, timeoutPromise]);
+  } finally {
+    if (timeoutHandle !== undefined) clearTimeout(timeoutHandle);
+  }
+}
+
+async function waitForStreamStartCleanup(streamStartPromise: Promise<StreamStartOutcome>, timeoutMs: number): Promise<boolean> {
+  const cleanupPromise = streamStartPromise.then(async (outcome) => outcome.kind === "started" ? closeStreamWithin(outcome.streamed, timeoutMs) : true);
+  return waitForBoolean(cleanupPromise, timeoutMs);
+}
+
 export class CodexSdkRelayClientImpl implements CodexSdkRelayClient {
   private readonly threads = new Map<string, OwnedThread>();
   private readonly ownedCodexThreadIds = new Set<string>();
@@ -154,6 +186,7 @@ export class CodexSdkRelayClientImpl implements CodexSdkRelayClient {
   private constructor(
     private readonly codex: SdkClient,
     private readonly timeoutMs: number,
+    private readonly streamCleanupTimeoutMs: number,
     private readonly sessionDirectory: string,
     private readonly initialSessionFiles: Set<string>,
   ) {}
@@ -173,7 +206,9 @@ export class CodexSdkRelayClientImpl implements CodexSdkRelayClient {
     }
     const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     if (!Number.isSafeInteger(timeoutMs) || timeoutMs <= 0) throw new Error("SDK_TIMEOUT_INVALID");
-    return new CodexSdkRelayClientImpl(codex, timeoutMs, sessionDirectory, initialSessionFiles);
+    const streamCleanupTimeoutMs = options.streamCleanupTimeoutMs ?? STREAM_CLEANUP_TIMEOUT_MS;
+    if (!Number.isSafeInteger(streamCleanupTimeoutMs) || streamCleanupTimeoutMs <= 0) throw new Error("SDK_CLEANUP_TIMEOUT_INVALID");
+    return new CodexSdkRelayClientImpl(codex, timeoutMs, streamCleanupTimeoutMs, sessionDirectory, initialSessionFiles);
   }
 
   async initialize(): Promise<void> {
@@ -198,23 +233,65 @@ export class CodexSdkRelayClientImpl implements CodexSdkRelayClient {
     return id;
   }
 
-  async runTurn(threadId: string, prompt: string, outputSchema?: unknown): Promise<string> {
+  async runTurn(threadId: string, prompt: string, outputSchema?: unknown, signal?: AbortSignal): Promise<string> {
     if (this.closed) throw new AppServerClientError("PROCESS_CLOSED");
     const owned = this.threads.get(threadId);
     if (!owned) throw new AppServerClientError("THREAD_NOT_FOUND");
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
-    const turnOptions: TurnOptions = { signal: controller.signal, ...(outputSchema === undefined ? {} : { outputSchema }) };
+    const turnSignal = signal === undefined ? controller.signal : AbortSignal.any([controller.signal, signal]);
+    const turnOptions: TurnOptions = { signal: turnSignal, ...(outputSchema === undefined ? {} : { outputSchema }) };
     let stage: SdkRunStage = "LAUNCH";
     const proof = createStreamProof();
     let terminal: "completed" | "failed" | undefined;
     let finalResponse = "";
     let streamPromise: Promise<void> | undefined;
     let timeoutHandle: NodeJS.Timeout | undefined;
+    let cancellationListener: (() => void) | undefined;
+    let cancellationPromise: Promise<"cancelled"> | undefined;
     try {
+      if (signal?.aborted === true) {
+        proof.abortRequested = true;
+        controller.abort();
+        throw new CodexSdkRelayError("SDK_TURN_CANCELLED", "TERMINAL_ABSENT", proof.lastLifecycleStage, snapshotStreamProof(proof), safeSdkDiagnostic("interrupted"));
+      }
       const input = owned.firstTurn ? `${owned.instructions}\n\n${prompt}` : prompt;
       owned.firstTurn = false;
-      const streamed = await owned.thread.runStreamed(input, turnOptions);
+      if (signal !== undefined) {
+        cancellationPromise = new Promise<"cancelled">((resolve) => {
+          cancellationListener = () => {
+            proof.abortRequested = true;
+            controller.abort();
+            resolve("cancelled");
+          };
+          signal.addEventListener("abort", cancellationListener, { once: true });
+        });
+      }
+      const timeoutOutcome = new Promise<"timeout">((resolve) => {
+        timeoutHandle = setTimeout(() => {
+          stage = "TERMINAL_ABSENT";
+          proof.abortRequested = true;
+          controller.abort();
+          resolve("timeout");
+        }, this.timeoutMs);
+      });
+      const streamStartPromise = owned.thread.runStreamed(input, turnOptions).then(
+        (streamed): StreamStartOutcome => ({ kind: "started", streamed }),
+        (error: unknown): StreamStartOutcome => ({ kind: "start-error", error }),
+      );
+      const startOutcome = await Promise.race([
+        streamStartPromise,
+        timeoutOutcome,
+        ...(cancellationPromise === undefined ? [] : [cancellationPromise]),
+      ]);
+      if (startOutcome === "cancelled" || startOutcome === "timeout") {
+        const startedAndClosed = await waitForStreamStartCleanup(streamStartPromise, this.streamCleanupTimeoutMs);
+        proof.streamClosed = startedAndClosed;
+        if (!startedAndClosed) throw new CodexSdkRelayError("SDK_STREAM_CLEANUP_FAILED", "TERMINAL_ABSENT", proof.lastLifecycleStage, snapshotStreamProof(proof), safeSdkDiagnostic("interrupted"));
+        throw new CodexSdkRelayError(startOutcome === "cancelled" ? "SDK_TURN_CANCELLED" : "SDK_TURN_TIMEOUT", "TERMINAL_ABSENT", proof.lastLifecycleStage, snapshotStreamProof(proof), safeSdkDiagnostic("interrupted"));
+      }
+      if (startOutcome.kind === "start-error") throw startOutcome.error;
+      const streamed = startOutcome.streamed;
       const iterator = streamed.events[Symbol.asyncIterator]();
       this.activeStreams += 1;
       streamPromise = (async () => {
@@ -250,14 +327,24 @@ export class CodexSdkRelayClientImpl implements CodexSdkRelayClient {
           this.activeStreams = Math.max(0, this.activeStreams - 1);
         }
       })();
-      const timeout = new Promise<never>((_, reject) => { timeoutHandle = setTimeout(() => {
-        stage = "TERMINAL_ABSENT";
-        proof.abortRequested = true;
-        controller.abort();
-        reject(new AppServerClientError("SDK_TURN_TIMEOUT"));
-      }, this.timeoutMs); });
-      await Promise.race([streamPromise, timeout]);
+      const streamOutcome = streamPromise.then(
+        () => ({ kind: "stream" as const }),
+        (error: unknown) => ({ kind: "stream-error" as const, error }),
+      );
+      const outcome = await Promise.race([
+        streamOutcome,
+        timeoutOutcome,
+        ...(cancellationPromise === undefined ? [] : [cancellationPromise]),
+      ]);
+      if (outcome === "cancelled" || outcome === "timeout") {
+        const settled = await waitForBoolean(streamPromise.then(() => true, () => true), this.streamCleanupTimeoutMs);
+        proof.streamClosed = settled;
+        if (!settled) throw new CodexSdkRelayError("SDK_STREAM_CLEANUP_FAILED", "TERMINAL_ABSENT", proof.lastLifecycleStage, snapshotStreamProof(proof), safeSdkDiagnostic("interrupted"));
+        throw new CodexSdkRelayError(outcome === "cancelled" ? "SDK_TURN_CANCELLED" : "SDK_TURN_TIMEOUT", "TERMINAL_ABSENT", proof.lastLifecycleStage, snapshotStreamProof(proof), safeSdkDiagnostic("interrupted"));
+      }
+      if (outcome.kind === "stream-error") throw outcome.error;
       if (timeoutHandle !== undefined) clearTimeout(timeoutHandle);
+      if (signal !== undefined && signal.aborted && terminal === undefined) throw new CodexSdkRelayError("SDK_TURN_CANCELLED", "TERMINAL_ABSENT", proof.lastLifecycleStage, snapshotStreamProof(proof), safeSdkDiagnostic("interrupted"));
       if (terminal === "failed") throw new CodexSdkRelayError("SDK_TURN_FAILED", "TERMINAL_FAILED", proof.lastLifecycleStage, snapshotStreamProof(proof), safeSdkDiagnostic("failed"));
       if (terminal !== "completed") throw new CodexSdkRelayError("SDK_TERMINAL_ABSENT", "TERMINAL_ABSENT", proof.lastLifecycleStage, snapshotStreamProof(proof), safeSdkDiagnostic("failed"));
       if (typeof finalResponse !== "string" || finalResponse.trim().length === 0) throw new AppServerClientError("SDK_INVALID_RESPONSE", safeSdkDiagnostic("failed"));
@@ -266,22 +353,24 @@ export class CodexSdkRelayClientImpl implements CodexSdkRelayClient {
     } catch (error) {
       if (timeoutHandle !== undefined) clearTimeout(timeoutHandle);
       if (error instanceof AppServerClientError) {
-        const timeoutOrAbsent = error.code === "SDK_TURN_TIMEOUT" || error.code === "SDK_TERMINAL_ABSENT" || controller.signal.aborted;
+        if (error.code === "SDK_STREAM_CLEANUP_FAILED") throw error;
+        const timeoutOrAbsent = error.code === "SDK_TURN_TIMEOUT" || error.code === "SDK_TERMINAL_ABSENT" || turnSignal.aborted;
         if (streamPromise !== undefined && timeoutOrAbsent) {
-          const settled = await Promise.race([streamPromise.then(() => true, () => true), new Promise<boolean>((resolve) => setTimeout(() => resolve(false), STREAM_CLEANUP_TIMEOUT_MS))]);
+          const settled = await waitForBoolean(streamPromise.then(() => true, () => true), this.streamCleanupTimeoutMs);
           proof.streamClosed = settled;
           if (!settled) throw new CodexSdkRelayError("SDK_STREAM_CLEANUP_FAILED", "TERMINAL_ABSENT", proof.lastLifecycleStage, snapshotStreamProof(proof), safeSdkDiagnostic("interrupted"));
-          throw new CodexSdkRelayError("SDK_TURN_TIMEOUT", "TERMINAL_ABSENT", proof.lastLifecycleStage, snapshotStreamProof(proof), safeSdkDiagnostic("interrupted"));
+          throw new CodexSdkRelayError(signal?.aborted === true ? "SDK_TURN_CANCELLED" : "SDK_TURN_TIMEOUT", "TERMINAL_ABSENT", proof.lastLifecycleStage, snapshotStreamProof(proof), safeSdkDiagnostic("interrupted"));
         }
         throw error;
       }
-      const timeoutOrAbort = controller.signal.aborted;
+      const timeoutOrAbort = turnSignal.aborted;
       if (timeoutOrAbort) proof.abortRequested = true;
-      throw new CodexSdkRelayError(timeoutOrAbort ? "SDK_TURN_TIMEOUT" : "SDK_TURN_FAILED", timeoutOrAbort ? "TERMINAL_ABSENT" : stage, proof.lastLifecycleStage, snapshotStreamProof(proof), safeSdkDiagnostic(timeoutOrAbort ? "interrupted" : "failed"));
+      throw new CodexSdkRelayError(signal?.aborted === true ? "SDK_TURN_CANCELLED" : timeoutOrAbort ? "SDK_TURN_TIMEOUT" : "SDK_TURN_FAILED", timeoutOrAbort ? "TERMINAL_ABSENT" : stage, proof.lastLifecycleStage, snapshotStreamProof(proof), safeSdkDiagnostic(timeoutOrAbort ? "interrupted" : "failed"));
     } finally {
       this.lastProof = snapshotStreamProof(proof);
       if (owned.thread.id !== null) this.ownedCodexThreadIds.add(owned.thread.id);
       clearTimeout(timer);
+      if (signal !== undefined && cancellationListener !== undefined) signal.removeEventListener("abort", cancellationListener);
     }
   }
 

@@ -60,3 +60,29 @@ because ChatCOM already depends on the official Codex TypeScript SDK and the
 official MCP TypeScript SDK. A C++ component is deferred until a measured native
 performance or operating-system integration requirement justifies the added
 interop and safety surface.
+
+## C-008 — Cancellation propagation
+
+**Status:** accepted — 2026-08-21
+
+Host cancellation is propagated through the local relay and Codex SDK stream.
+Cancellation remains bounded, returns a stable error code, and requires the
+usual thread and process cleanup before completion.
+
+## C-009 — Reproducible verification
+
+**Status:** accepted — 2026-08-21
+
+`npm run verify` is the local and CI gate. It covers build, typecheck, all
+deterministic tests, configuration validation, the production dependency audit,
+and package dry-run.
+
+## C-010 — v1 release candidate
+
+**Status:** accepted — 2026-08-21
+
+The converged relay is versioned `1.0.0-rc.1` before a formal stable release.
+The candidate keeps TypeScript as its orchestration language, has a single
+strict message-contract source, propagates cancellation from MCP to the Codex
+SDK, validates on Ubuntu, Windows and macOS, and requires a successful real MCP
+proof. A tag, GitHub Release and npm publication remain separate user decisions.

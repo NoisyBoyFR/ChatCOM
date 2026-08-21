@@ -64,3 +64,38 @@ CHATCOM_MCP_PROOF kind=SUCCESS code=OK tools=2 transmissions=3 cleanup=CONFIRMED
 - MCP tool failures and ordinary text results: bounded and content-free;
 - relay target sandbox: read-only with model-side approvals disabled;
 - MCP host approval: required per real relay call by the supplied configuration.
+
+## Local v1 convergence verification — 2026-08-21
+
+The local convergence changes were validated without invoking a real relay or
+external diagnostic. The strict MCP contract, cancellation propagation,
+version-derived server metadata, unified verification gate, and documentation
+updates are covered by deterministic tests and `npm run verify`.
+
+This is not a new real-operation claim. A new MCP proof remains required after
+the local changes are reviewed and explicitly authorized.
+
+## Real v1 release-candidate MCP proof — 2026-08-21
+
+The `1.0.0-rc.1` candidate was exercised once through the real local MCP STDIO
+server and authenticated Codex runtime after the strict contract and bounded
+cancellation changes passed deterministic review. The run remained read-only,
+performed exactly three transmissions, stopped before a second Codex mission,
+and confirmed process and temporary-file cleanup. No prompt, model response,
+credential, server message, or stack trace was printed or persisted.
+
+```text
+CHATCOM_MCP_PROOF kind=SUCCESS code=OK tools=2 transmissions=3 cleanup=CONFIRMED processExited=true tempRemoved=true
+```
+
+### `1.0.0-rc.1` deterministic review
+
+- build: passed;
+- typecheck: passed;
+- tests: 83 passed, 0 failed;
+- example configuration validation: passed;
+- package dry-run: 31 files;
+- production dependency audit: 0 known vulnerabilities;
+- diff whitespace validation: passed;
+- real proof attempts used: 1 of the authorized maximum of 2;
+- runtime code was not changed after the successful proof.

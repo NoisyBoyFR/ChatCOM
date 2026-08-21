@@ -8,12 +8,16 @@ ChatCOM est un relay local réutilisable pour une communication structurée entr
 
 Le noyau réutilisable a été séparé de FitMyLife dans un projet autonome. La configuration, le contrat de messages, le routage, le nettoyage, les diagnostics bornés, l’adaptateur Codex SDK, le fallback App Server et les tests synthétiques sont disponibles.
 
-ChatCOM v0.2.0 est opérationnel pour son workflow local borné. Le cycle de vie
+ChatCOM v0.3.0 ajoute un pont MCP STDIO local au relay opérationnel borné. Work
+peut valider une configuration et invoquer un relay explicitement autorisé via
+des outils MCP structurés, sans faire transiter le contenu du modèle dans les
+diagnostics terminaux. Le cycle de vie
 Codex SDK authentifié, le relay complet Work ↔ Codex à trois transmissions et
-le fallback App Server ont réussi avec un nettoyage confirmé. Les preuves
-terminales sûres sont consignées dans [`.ai/PROOF.md`](.ai/PROOF.md).
+le fallback App Server ont réussi avec un nettoyage confirmé. La preuve MCP et
+les preuves runtime antérieures sont consignées dans
+[`.ai/PROOF.md`](.ai/PROOF.md).
 
-La baseline opérationnelle réussit 66 tests déterministes, le build, le
+La baseline opérationnelle réussit 71 tests déterministes, le build, le
 typecheck, la validation de configuration, le contrôle d’archive à blanc et
 l’audit des dépendances de production.
 
@@ -28,6 +32,11 @@ l’audit des dépendances de production.
 
 L’API TypeScript restitue les trois enveloppes validées à son appelant. La CLI
 n’affiche volontairement que des métadonnées de statut.
+
+Le pont MCP restitue les enveloppes complètes comme contenu structuré. Son texte
+ordinaire reste borné. `chatcom_run_relay` est déclaré comme action externe et
+non idempotente afin que l’hôte exige une approbation explicite à chaque appel,
+même si le dépôt inspecté reste en lecture seule.
 
 ## Prérequis
 
@@ -78,6 +87,30 @@ const result = await runPortableRelay(config, { timeoutMs: 600_000 });
 
 const [mission, report, nextPrompt] = result.relay.messages;
 // Consommer les contenus validés par programme sans les imprimer dans les diagnostics bornés.
+```
+
+## Pont MCP
+
+Compiler ChatCOM, puis copier
+[`.codex/config.toml.example`](.codex/config.toml.example) dans une configuration
+Codex approuvée et remplacer les chemins fictifs. Redémarrer l’hôte Codex après
+toute modification de la configuration MCP.
+
+Le serveur expose exactement deux outils :
+
+- `chatcom_validate_config` valide la configuration sans démarrer Codex ;
+- `chatcom_run_relay` exécute un relay autorisé à trois transmissions et
+  restitue `MISSION`, `REPORT` et `NEXT_PROMPT` sous forme structurée.
+
+Conserver `chatcom_run_relay` en mode d’approbation `prompt`. La sortie du
+protocole MCP est le transport privé destiné à Work ; elle ne doit pas être
+recopiée dans les diagnostics terminaux.
+
+Pour démarrer directement le serveur STDIO :
+
+```powershell
+npm run build
+npm run mcp
 ```
 
 ## Développement

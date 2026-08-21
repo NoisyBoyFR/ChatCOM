@@ -39,3 +39,28 @@ DIFFERENTIAL failure=NONE modelSelectedFromList=true minimalTurn=SUCCEEDED schem
 Operational status remains conditional on preserving the safety model defined
 in `AGENTS.md` and on re-running appropriate real proof after future runtime or
 relay changes.
+
+## Real MCP bridge proof — 2026-08-21
+
+The v0.3.0 MCP server was started as a real STDIO child process. An MCP client
+listed the two tools, validated a temporary configuration, invoked the complete
+authenticated relay, received all three structured envelopes, and closed the
+server. Model content was inspected only as private protocol data and was not
+printed or persisted by the diagnostic.
+
+```text
+CHATCOM_MCP_PROOF kind=SUCCESS code=OK tools=2 transmissions=3 cleanup=CONFIRMED processExited=true tempRemoved=true
+```
+
+### v0.3.0 deterministic review
+
+- build: passed;
+- typecheck: passed;
+- tests: 71 passed, 0 failed;
+- real STDIO validation process: passed;
+- example configuration validation: passed;
+- package dry-run: passed;
+- production dependency audit: 0 known vulnerabilities;
+- MCP tool failures and ordinary text results: bounded and content-free;
+- relay target sandbox: read-only with model-side approvals disabled;
+- MCP host approval: required per real relay call by the supplied configuration.

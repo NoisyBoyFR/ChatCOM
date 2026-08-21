@@ -1,6 +1,6 @@
 {
   "name": "chatcom",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "description": "Reusable local communication relay between Work and Codex.",
   "type": "module",
@@ -9,10 +9,15 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./mcp": {
+      "types": "./dist/mcp-server.d.ts",
+      "default": "./dist/mcp-server.js"
     }
   },
   "bin": {
-    "chatcom": "./dist/portable-cli.js"
+    "chatcom": "./dist/portable-cli.js",
+    "chatcom-mcp": "./dist/mcp-server.js"
   },
   "files": [
     "dist",
@@ -21,24 +26,32 @@
     "CODEX-CHATCOM-PROMPT.md",
     "README.md",
     "README.fr.md",
+    ".codex/config.toml.example",
+    "scripts/differential-diagnostic.mjs",
+    "scripts/sdk-diagnostic.mjs",
+    "scripts/mcp-diagnostic.mjs",
     "relay.config.example.json"
   ],
   "scripts": {
     "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "npm run clean && npm run build && node --test dist/test/app-server-client.test.js dist/test/message-contract.test.js dist/test/local-relay.test.js dist/test/differential-diagnostic.test.js dist/test/codex-sdk-relay.test.js dist/test/portable-relay.test.js scripts/differential-diagnostic.test.mjs",
+    "test": "npm run clean && npm run build && node --test dist/test/app-server-client.test.js dist/test/message-contract.test.js dist/test/local-relay.test.js dist/test/differential-diagnostic.test.js dist/test/codex-sdk-relay.test.js dist/test/portable-relay.test.js dist/test/mcp-server.test.js scripts/differential-diagnostic.test.mjs",
     "validate-config": "npm run build && node dist/portable-cli.js validate --config relay.config.example.json",
     "verify": "npm run build && npm run typecheck && npm test && npm run validate-config && npm pack --dry-run",
     "diagnose:app-server": "node scripts/differential-diagnostic.mjs",
     "diagnose:sdk": "node scripts/sdk-diagnostic.mjs",
+    "diagnose:mcp": "node scripts/mcp-diagnostic.mjs",
+    "mcp": "node dist/mcp-server.js",
     "prepack": "npm run clean && npm run build"
   },
   "engines": {
     "node": ">=22"
   },
   "dependencies": {
-    "@openai/codex-sdk": "0.149.0"
+    "@modelcontextprotocol/sdk": "1.30.0",
+    "@openai/codex-sdk": "0.149.0",
+    "zod": "4.4.3"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

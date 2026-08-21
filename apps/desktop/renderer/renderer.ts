@@ -3,6 +3,7 @@ import { detectLocale, isSupportedLocale, translate, type I18nKey, type Locale }
 import type { DesktopPreferences, Theme, TextSize, UpdateChannel, WindowMode } from "../../../src/desktop/preferences.js";
 import type { UpdateSnapshot } from "../../../src/desktop/updater.js";
 import { SettingsSession, type EditablePreferences } from "../../../src/desktop/settings-session.js";
+import { DesktopStartCoordinator, isDesktopStartEnabled } from "../../../src/desktop/start-policy.js";
 
 const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
 const projectRoot = $("project-root") as HTMLInputElement;
@@ -34,6 +35,7 @@ let preflight: import("../../../src/desktop/preflight.js").PreflightResult | und
 let locale: Locale = detectLocale(navigator.language);
 let settingsTrigger: HTMLElement | undefined;
 let settingsStatusTimer: number | undefined;
+const startCoordinator = new DesktopStartCoordinator();
 
 const t = (key: I18nKey, params: Record<string, string | number> = {}): string => translate(locale, key, params);
 function setStatus(text: string): void { footerStatus.textContent = text; }
@@ -73,8 +75,12 @@ function validateForm(): HTMLElement | undefined {
   if (!Number.isSafeInteger(globalLimit) || globalLimit <= 0) return globalTimeout;
   return undefined;
 }
+function renderStartButton(): void {
+  $("start").toggleAttribute("disabled", !isDesktopStartEnabled(snapshot?.state, preflight?.canStart === true, startCoordinator.busy));
+}
 function renderSnapshot(next: ConversationSnapshot): void {
   snapshot = next;
+  if (startCoordinator.busy && next.state !== "IDLE" && next.state !== "READY") startCoordinator.release();
   stateBadge.textContent = next.state;
   stateBadge.className = `badge state-${next.state.toLowerCase()}`;
   $("conversation-id").textContent = next.conversationId;
@@ -83,7 +89,7 @@ function renderSnapshot(next: ConversationSnapshot): void {
   $("cleanup").textContent = next.cleanup;
   $("session-id").textContent = next.currentSessionId ?? "—";
   const running = ["RUNNING", "PAUSE_REQUESTED", "STOPPING"].includes(next.state);
-  $("start").toggleAttribute("disabled", running || !["READY", "PAUSED"].includes(next.state) || preflight?.canStart !== true);
+  renderStartButton();
   $("pause").toggleAttribute("disabled", next.state !== "RUNNING");
   $("resume").toggleAttribute("disabled", next.state !== "PAUSED");
   $("stop").toggleAttribute("disabled", !running && !["READY", "PAUSED"].includes(next.state));
@@ -98,7 +104,7 @@ function renderPreflight(next: import("../../../src/desktop/preflight.js").Prefl
   $("auth-status").textContent = next.authentication.status;
   $("project-status").textContent = next.project.status;
   $("security-status").textContent = t("readOnly");
-  $("start").toggleAttribute("disabled", snapshot === undefined || !["READY", "PAUSED"].includes(snapshot.state) || next.canStart !== true);
+  renderStartButton();
   configurationStatus.textContent = next.canStart ? t("preflightReady") : t("preflightRequired");
   configurationStatus.className = next.canStart ? "hint" : "hint error";
 }
@@ -231,9 +237,24 @@ document.addEventListener("keydown", (event) => {
     void window.chatcomDesktop.updatePreferences({ windowMode: "normal" }).then((next) => { preferences = next; applyDisplaySettings(next); }).catch(showError);
   }
 });
-$("choose-project").addEventListener("click", async () => { try { const result = await window.chatcomDesktop.chooseProject(); if (!result.canceled && result.projectRoot) { projectRoot.value = result.projectRoot; preflight = undefined; configurationStatus.textContent = t("projectSelected"); configurationStatus.className = "hint"; } } catch (error) { showError(error); } });
+$("choose-project").addEventListener("click", async () => { try { const result = await window.chatcomDesktop.chooseProject(); if (!result.canceled && result.projectRoot) { projectRoot.value = result.projectRoot; preflight = undefined; renderStartButton(); configurationStatus.textContent = t("projectSelected"); configurationStatus.className = "hint"; } } catch (error) { showError(error); } });
 $("verify-config").addEventListener("click", async () => { try { renderPreflight(await window.chatcomDesktop.preflight()); if (snapshot) renderSnapshot(snapshot); setStatus(t("preflight")); } catch (error) { showError(error); } });
-$("start").addEventListener("click", async () => { const firstError = validateForm(); if (firstError) { firstError.focus(); setStatus(t("accessibilityRequired")); return; } try { const configured = await window.chatcomDesktop.configure({ projectRoot: projectRoot.value, phase: phase.value, point: point.value, mission: mission.value, maxCycles: Number(maxCycles.value), cycleTimeoutMs: Number(cycleTimeout.value), globalTimeoutMs: Number(globalTimeout.value) }); renderSnapshot(configured); timeline.replaceChildren(); await window.chatcomDesktop.start(); setStatus(t("started")); } catch (error) { showError(error); } });
+async function startConversation(): Promise<void> {
+  if (!isDesktopStartEnabled(snapshot?.state, preflight?.canStart === true, startCoordinator.busy)) return;
+  const firstError = validateForm();
+  if (firstError) { firstError.focus(); setStatus(t("accessibilityRequired")); return; }
+  try {
+    await startCoordinator.activate(async () => {
+      const configured = await window.chatcomDesktop.configure({ projectRoot: projectRoot.value, phase: phase.value, point: point.value, mission: mission.value, maxCycles: Number(maxCycles.value), cycleTimeoutMs: Number(cycleTimeout.value), globalTimeoutMs: Number(globalTimeout.value) });
+      renderSnapshot(configured);
+      timeline.replaceChildren();
+      renderSnapshot(await window.chatcomDesktop.start());
+      setStatus(t("started"));
+    });
+  } catch (error) { showError(error); }
+  renderStartButton();
+}
+$("start").addEventListener("click", () => { void startConversation(); });
 $("pause").addEventListener("click", async () => { try { renderSnapshot(await window.chatcomDesktop.pause()); setStatus(t("paused")); } catch (error) { showError(error); } });
 $("resume").addEventListener("click", async () => { try { renderSnapshot(await window.chatcomDesktop.resume()); setStatus(t("resumed")); } catch (error) { showError(error); } });
 $("stop").addEventListener("click", async () => { try { renderSnapshot(await window.chatcomDesktop.stop()); setStatus(t("stopped")); } catch (error) { showError(error); } });

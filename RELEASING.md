@@ -88,3 +88,18 @@ separate static Squirrel layout at `/preview/win32/x64`; this layout is only
 validated by the local synthetic feed until a separately authorized hosting
 deployment exists. Stable never consumes RC artefacts, and Preview never
 silently downgrades.
+
+The protected manual signing workflow is `.github/workflows/sign-windows.yml`.
+It runs only from `main`, requires the `windows-code-signing` environment and
+the exact `SIGN_RC4` confirmation, authenticates to Azure through OIDC, and
+uses the official Artifact Signing action pinned to a full commit SHA. It signs
+the packaged PE files before Squirrel assembly and signs the final Setup before
+hash and manifest generation. The workflow only uploads a temporary
+`-signed` validation artifact; it has read-only repository permissions and
+cannot create a tag or GitHub Release.
+
+The repository owner must complete the identity validation, Public Trust
+certificate profile, federated credential, role assignment, and protected
+environment variables described in [WINDOWS-SIGNING.md](WINDOWS-SIGNING.md).
+Until that external setup exists and the workflow proves a valid publisher and
+timestamp, RC.4 publication remains blocked.

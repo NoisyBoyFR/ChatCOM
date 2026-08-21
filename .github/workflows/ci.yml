@@ -71,11 +71,12 @@ jobs:
       - name: Upload Windows installer
         uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808
         with:
-          name: chatcom-desktop-1.0.0-rc.4-windows-x64
+          name: chatcom-desktop-1.0.0-rc.4-windows-x64-unsigned-validation
           path: |
             out-desktop/make/squirrel.windows/x64/ChatCOM-Desktop-1.0.0-rc.4-Setup.exe
             out-desktop/make/squirrel.windows/x64/*-full.nupkg
             out-desktop/make/squirrel.windows/x64/RELEASES
             out-desktop/SHA256SUMS.txt
             out-desktop/desktop-build-manifest.json
+          if-no-files-found: error
           retention-days: 14

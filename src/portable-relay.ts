@@ -6,6 +6,7 @@ import type { PortableRelayConfig } from "./relay-config.js";
 export interface PortableRelayRunOptions {
   timeoutMs?: number;
   sessionId?: string;
+  signal?: AbortSignal;
   createClient?: (projectRoot: string, timeoutMs: number) => Promise<CodexSdkRelayClient>;
 }
 
@@ -21,8 +22,8 @@ class StructuredRelayAgent implements RelayAgent {
     return this.client.startThread(instructions, cwd);
   }
 
-  runTurn(threadId: string, prompt: string): Promise<string> {
-    return this.client.runTurn(threadId, prompt, MESSAGE_OUTPUT_SCHEMA);
+  runTurn(threadId: string, prompt: string, signal?: AbortSignal): Promise<string> {
+    return this.client.runTurn(threadId, prompt, MESSAGE_OUTPUT_SCHEMA, signal);
   }
 
   deleteThread(threadId: string): Promise<void> {
@@ -33,6 +34,7 @@ class StructuredRelayAgent implements RelayAgent {
 export async function runPortableRelay(config: PortableRelayConfig, options: PortableRelayRunOptions = {}): Promise<PortableRelayRunResult> {
   const timeoutMs = options.timeoutMs ?? 600_000;
   if (!Number.isSafeInteger(timeoutMs) || timeoutMs <= 0 || timeoutMs > 3_600_000) throw new RelayFailure("PORTABLE_TIMEOUT_INVALID");
+  if (options.signal?.aborted) throw new RelayFailure("RELAY_CANCELLED");
   const createClient = options.createClient ?? ((projectRoot: string, configuredTimeout: number) => createCodexSdkRelayClient(projectRoot, { timeoutMs: configuredTimeout }));
   let client: CodexSdkRelayClient | undefined;
   let result: RelayResult | undefined;
@@ -49,7 +51,7 @@ export async function runPortableRelay(config: PortableRelayConfig, options: Por
       ...(options.sessionId === undefined ? {} : { sessionId: options.sessionId }),
       ...(config.workInstructions === undefined ? {} : { workInstructions: config.workInstructions }),
       ...(config.codexInstructions === undefined ? {} : { codexInstructions: config.codexInstructions }),
-    });
+    }, { signal: options.signal });
   } catch (error) {
     primaryError = error;
   } finally {

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { createMessage, MessageContractError, MessageLedger, MESSAGE_OUTPUT_SCHEMA, parseMessageText, validateMessage, type MessageEnvelope } from "../message-contract.js";
+import { createMessage, MAX_CONTENT_BYTES, MAX_ROUTE_BYTES, MESSAGE_DATE_PATTERN, MessageContractError, MessageLedger, MESSAGE_OUTPUT_SCHEMA, parseMessageText, validateMessage, validateRelayMessages, type MessageEnvelope } from "../message-contract.js";
 
 const UUIDS = [
   "11111111-1111-4111-8111-111111111111",
@@ -52,7 +52,34 @@ test("rejects malformed identifiers and dates", () => {
 
 test("rejects empty and oversized content", () => {
   assert.throws(() => validateMessage(envelope({ content: "  " })), /EMPTY_CONTENT/);
-  assert.throws(() => validateMessage(envelope({ content: "x".repeat(32_769) })), /CONTENT_TOO_LARGE/);
+  assert.equal(validateMessage(envelope({ content: "x".repeat(MAX_CONTENT_BYTES) })).content.length, MAX_CONTENT_BYTES);
+  const multibyteAtLimit = "é".repeat(MAX_CONTENT_BYTES / 2);
+  assert.equal(Buffer.byteLength(multibyteAtLimit, "utf8"), MAX_CONTENT_BYTES);
+  assert.equal(validateMessage(envelope({ content: multibyteAtLimit })).content, multibyteAtLimit);
+  assert.throws(() => validateMessage(envelope({ content: `${multibyteAtLimit}é` })), /CONTENT_TOO_LARGE/);
+});
+
+test("bounds route text by UTF-8 bytes", () => {
+  const base = envelope();
+  assert.doesNotThrow(() => validateMessage({ ...base, phase: "é".repeat(MAX_ROUTE_BYTES / 2) }));
+  assert.throws(() => validateMessage({ ...base, point: "é".repeat(MAX_ROUTE_BYTES / 2 + 1) }), /POINT_TOO_LARGE/);
+});
+
+test("uses the canonical ISO instant date in both runtime and schema", () => {
+  const canonical = "2026-08-18T12:00:00.000Z";
+  assert.equal(MESSAGE_DATE_PATTERN.test(canonical), true);
+  assert.equal(validateMessage(envelope({ created_at: canonical })).created_at, canonical);
+  assert.throws(() => validateMessage(envelope({ created_at: "2026-08-18T12:00:00Z" })), /INVALID_DATE/);
+  assert.equal((MESSAGE_OUTPUT_SCHEMA.properties.created_at as { pattern?: string }).pattern, MESSAGE_DATE_PATTERN.source);
+});
+
+test("validates the complete relay route before returning it", () => {
+  const first = envelope();
+  const report = envelope({ message_id: UUIDS[2], sequence: 2, type: "REPORT", sender: "CODEX_LOCAL", recipient: "WORK_LOCAL", correlation_id: first.message_id });
+  const next = envelope({ message_id: UUIDS[3], sequence: 3, type: "NEXT_PROMPT", correlation_id: report.message_id });
+  assert.deepEqual(validateRelayMessages([first, report, next]), [first, report, next]);
+  assert.throws(() => validateRelayMessages([first, next, report]), /INVALID_RELAY_ROUTE|OUT_OF_ORDER_MESSAGE/);
+  assert.throws(() => validateRelayMessages([envelope({ correlation_id: UUIDS[2] }), report, next]), /INVALID_RELAY_ROUTE/);
 });
 
 test("rejects invalid sequence, enum and role combinations", () => {

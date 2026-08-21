@@ -1,13 +1,18 @@
 #!/usr/bin/env node
 import { resolve } from "node:path";
+import { createRequire } from "node:module";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import * as z from "zod/v4";
 import { RelayFailure } from "./local-relay.js";
+import { MAX_CONTENT_BYTES, MAX_ROUTE_BYTES, DELIVERY_STATUSES, MESSAGE_DATE_PATTERN, MESSAGE_ROLES, MESSAGE_TYPES, MESSAGE_UUID_PATTERN, validateRelayMessages } from "./message-contract.js";
 import { loadRelayConfig, RelayConfigError, type PortableRelayConfig } from "./relay-config.js";
 import { runPortableRelay, type PortableRelayRunResult } from "./portable-relay.js";
 
-export const CHATCOM_MCP_VERSION = "0.3.0" as const;
+const packageRequire = createRequire(import.meta.url);
+const packageMetadata = packageRequire("../package.json") as { version?: unknown };
+if (typeof packageMetadata.version !== "string" || packageMetadata.version.trim().length === 0) throw new Error("PACKAGE_VERSION_INVALID");
+export const CHATCOM_MCP_VERSION = packageMetadata.version;
 export const CHATCOM_VALIDATE_TOOL = "chatcom_validate_config" as const;
 export const CHATCOM_RELAY_TOOL = "chatcom_run_relay" as const;
 
@@ -15,21 +20,28 @@ export const CHATCOM_MCP_INSTRUCTIONS =
   "ChatCOM is a local read-only Work-to-Codex relay. Call chatcom_validate_config before chatcom_run_relay. Run the relay only with explicit user authorization. Never copy raw message content into terminal diagnostics. The relay performs exactly three transmissions, stops before a second Codex mission, and fails closed when cleanup is not confirmed.";
 
 const configPathSchema = z.string().trim().min(1).max(4_096).describe("Path to a ChatCOM relay configuration file.");
+const uuidSchema = z.string().regex(MESSAGE_UUID_PATTERN);
+const utf8TextSchema = (maximumBytes: number, description: string) =>
+  z.string().min(1).refine((value) => value.trim().length > 0, { message: description }).refine((value) => Buffer.byteLength(value, "utf8") <= maximumBytes, { message: description }).describe(description);
+const dateSchema = z.string().regex(MESSAGE_DATE_PATTERN).refine((value) => {
+  try { return new Date(value).toISOString() === value; }
+  catch { return false; }
+}, { message: "Date must be a canonical ISO instant." });
 
 const messageSchema = z.object({
   version: z.literal("1.0"),
-  session_id: z.string(),
-  message_id: z.string(),
-  correlation_id: z.string(),
+  session_id: uuidSchema,
+  message_id: uuidSchema,
+  correlation_id: uuidSchema,
   sequence: z.number().int().positive(),
-  sender: z.enum(["WORK_LOCAL", "CODEX_LOCAL", "USER"]),
-  recipient: z.enum(["WORK_LOCAL", "CODEX_LOCAL", "USER"]),
-  type: z.enum(["MISSION", "REPORT", "NEXT_PROMPT", "USER_DECISION_REQUIRED", "ERROR"]),
-  phase: z.string(),
-  point: z.string(),
-  content: z.string(),
-  created_at: z.string(),
-  delivery_status: z.enum(["CREATED", "SENT", "RECEIVED", "PROCESSED", "FAILED"]),
+  sender: z.enum(MESSAGE_ROLES),
+  recipient: z.enum(MESSAGE_ROLES),
+  type: z.enum(MESSAGE_TYPES),
+  phase: utf8TextSchema(MAX_ROUTE_BYTES, "UTF-8 length is bounded by the relay route contract."),
+  point: utf8TextSchema(MAX_ROUTE_BYTES, "UTF-8 length is bounded by the relay route contract."),
+  content: utf8TextSchema(MAX_CONTENT_BYTES, "UTF-8 byte length is bounded by MAX_CONTENT_BYTES at runtime."),
+  created_at: dateSchema,
+  delivery_status: z.enum(DELIVERY_STATUSES),
   user_action_needed: z.boolean(),
 });
 
@@ -43,7 +55,7 @@ const validationOutputSchema = {
 
 const relayOutputSchema = {
   status: z.literal("SUCCESS"),
-  session_id: z.string(),
+  session_id: uuidSchema,
   transmissions: z.literal(3),
   stopped_before_second_codex_mission: z.literal(true),
   cleanup: z.literal("CONFIRMED"),
@@ -52,12 +64,12 @@ const relayOutputSchema = {
 
 export interface ChatComMcpDependencies {
   loadConfig(path: string): Promise<PortableRelayConfig>;
-  runRelay(config: PortableRelayConfig, timeoutMs: number): Promise<PortableRelayRunResult>;
+  runRelay(config: PortableRelayConfig, timeoutMs: number, signal?: AbortSignal): Promise<PortableRelayRunResult>;
 }
 
 const DEFAULT_DEPENDENCIES: ChatComMcpDependencies = {
   loadConfig: loadRelayConfig,
-  runRelay: (config, timeoutMs) => runPortableRelay(config, { timeoutMs }),
+  runRelay: (config, timeoutMs, signal) => runPortableRelay(config, { timeoutMs, signal }),
 };
 
 function safeErrorCode(error: unknown): string {
@@ -119,17 +131,19 @@ export function createChatComMcpServer(dependencies: ChatComMcpDependencies = DE
       outputSchema: relayOutputSchema,
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
     },
-    async ({ config_path, timeout_ms }) => {
+    async ({ config_path, timeout_ms }, extra) => {
       try {
         const config = await dependencies.loadConfig(resolve(config_path));
-        const result = await dependencies.runRelay(config, timeout_ms ?? 600_000);
+        const result = await dependencies.runRelay(config, timeout_ms ?? 600_000, extra.signal);
+        const messages = validateRelayMessages(result.relay.messages);
+        if (result.relay.sessionId !== messages[0].session_id) throw new RelayFailure("RELAY_SESSION_MISMATCH");
         const structuredContent = {
           status: "SUCCESS" as const,
           session_id: result.relay.sessionId,
           transmissions: 3 as const,
           stopped_before_second_codex_mission: true as const,
           cleanup: result.cleanup,
-          messages: [...result.relay.messages],
+          messages: [...messages],
         };
         return {
           structuredContent,

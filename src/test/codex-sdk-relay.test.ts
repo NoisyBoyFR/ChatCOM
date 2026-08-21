@@ -31,20 +31,23 @@ test("SDK runtime resolves to the canonical exact 0.149.0 native executable", { 
 class FakeThread {
   id: string | null = "fake-thread-id";
   readonly calls: { input: string; options: unknown }[] = [];
-  constructor(private readonly response: string | (() => string), private readonly failure = false, private readonly hang = false) {}
+  constructor(private readonly response: string | (() => string), private readonly failure = false, private readonly hang = false, private readonly ignoreAbort = false, private readonly startNever = false) {}
   async run(): Promise<never> {
     throw new Error("run() must not be used by the SDK relay");
   }
   async runStreamed(input: string, options: TurnOptions): Promise<{ events: AsyncGenerator<ThreadEvent> }> {
     this.calls.push({ input, options });
+    if (this.startNever) return new Promise<{ events: AsyncGenerator<ThreadEvent> }>(() => undefined);
     const response = typeof this.response === "function" ? this.response() : this.response;
     const failure = this.failure;
     const hang = this.hang;
+    const ignoreAbort = this.ignoreAbort;
     const signal = options.signal;
     return { events: (async function* (): AsyncGenerator<ThreadEvent> {
       yield { type: "thread.started", thread_id: "fake-thread-id" };
       yield { type: "turn.started" };
       if (hang) {
+        if (ignoreAbort) await new Promise<void>(() => undefined);
         await new Promise<void>((resolve) => signal?.addEventListener("abort", () => resolve(), { once: true }));
         throw new Error("sensitive stream detail");
       }
@@ -110,6 +113,75 @@ test("SDK adapter classifies a missing terminal after abort and waits for stream
   });
   await client.deleteThread(id);
   assert.deepEqual(await client.close(), { exited: true, forced: false });
+});
+
+test("SDK adapter propagates an external cancellation and closes the stream", async () => {
+  const thread = new FakeThread("", false, true);
+  const client = await createCodexSdkRelayClient("C:\\synthetic", { timeoutMs: 1_000, codex: { startThread: () => thread as unknown as Thread } });
+  const id = await client.startThread("CODEX_LOCAL instructions", "C:\\synthetic");
+  const controller = new AbortController();
+  const pending = client.runTurn(id, "prompt", undefined, controller.signal);
+  setTimeout(() => controller.abort(), 10);
+  await assert.rejects(pending, (error) => {
+    assert.ok(error instanceof AppServerClientError);
+    assert.equal(error.code, "SDK_TURN_CANCELLED");
+    assert.deepEqual(error.diagnostic, { method: "codex-sdk", categoryUnknown: true, finalStatus: "interrupted", sdkStage: "TERMINAL_ABSENT", sdkLastStage: "TURN_START" });
+    return true;
+  });
+  await client.deleteThread(id);
+  assert.deepEqual(await client.close(), { exited: true, forced: false });
+});
+
+test("SDK adapter detects a pre-aborted signal before starting a turn", async () => {
+  const thread = new FakeThread(message);
+  const client = await createCodexSdkRelayClient("C:\\synthetic", { codex: { startThread: () => thread as unknown as Thread } });
+  const id = await client.startThread("CODEX_LOCAL instructions", "C:\\synthetic");
+  const controller = new AbortController();
+  controller.abort();
+  await assert.rejects(client.runTurn(id, "prompt", undefined, controller.signal), (error) => {
+    assert.ok(error instanceof AppServerClientError);
+    assert.equal(error.code, "SDK_TURN_CANCELLED");
+    assert.equal(thread.calls.length, 0);
+    return true;
+  });
+  await client.deleteThread(id);
+  await client.close();
+});
+
+test("SDK adapter bounds cleanup when a stream ignores cancellation", async () => {
+  const thread = new FakeThread("", false, true, true);
+  const client = await createCodexSdkRelayClient("C:\\synthetic", { timeoutMs: 1_000, streamCleanupTimeoutMs: 20, codex: { startThread: () => thread as unknown as Thread } });
+  const id = await client.startThread("CODEX_LOCAL instructions", "C:\\synthetic");
+  const controller = new AbortController();
+  const started = Date.now();
+  const pending = client.runTurn(id, "prompt", undefined, controller.signal);
+  setTimeout(() => controller.abort(), 10);
+  await assert.rejects(pending, (error) => {
+    assert.ok(error instanceof AppServerClientError);
+    assert.equal(error.code, "SDK_STREAM_CLEANUP_FAILED");
+    return true;
+  });
+  assert.ok(Date.now() - started < 500);
+  await client.deleteThread(id);
+  await client.close();
+});
+
+test("SDK adapter bounds a runStreamed call that never resolves", async () => {
+  const thread = new FakeThread("", false, false, false, true);
+  const client = await createCodexSdkRelayClient("C:\\synthetic", { timeoutMs: 1_000, streamCleanupTimeoutMs: 20, codex: { startThread: () => thread as unknown as Thread } });
+  const id = await client.startThread("CODEX_LOCAL instructions", "C:\\synthetic");
+  const controller = new AbortController();
+  const started = Date.now();
+  const pending = client.runTurn(id, "prompt", undefined, controller.signal);
+  setTimeout(() => controller.abort(), 10);
+  await assert.rejects(pending, (error) => {
+    assert.ok(error instanceof AppServerClientError);
+    assert.equal(error.code, "SDK_STREAM_CLEANUP_FAILED");
+    return true;
+  });
+  assert.ok(Date.now() - started < 500);
+  await client.deleteThread(id);
+  await client.close();
 });
 
 test("SDK adapter drives the complete three-transmission relay", async () => {

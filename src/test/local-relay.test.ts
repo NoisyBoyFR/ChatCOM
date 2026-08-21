@@ -20,10 +20,20 @@ function fixtureMessages(): [MessageEnvelope, MessageEnvelope, MessageEnvelope] 
 class FakeRelayAgent {
   readonly starts: string[] = [];
   readonly turns: { threadId: string; prompt: string }[] = [];
+  readonly signals: (AbortSignal | undefined)[] = [];
   readonly deletes: string[] = [];
-  constructor(private readonly outputs: string[], private readonly failureOnCall?: number) {}
+  constructor(private readonly outputs: string[], private readonly failureOnCall?: number, private readonly cancelOnCall?: number) {}
   async startThread(instructions: string): Promise<string> { const id = instructions.includes("WORK_LOCAL") ? "work-thread" : "codex-thread"; this.starts.push(id); return id; }
-  async runTurn(threadId: string, prompt: string): Promise<string> { this.turns.push({ threadId, prompt }); if (this.failureOnCall === this.turns.length) throw new AppServerClientError("TURN_TIMEOUT", { method: "turn/start", retryCount: 2, retryCategoryCounts: { "codexErrorInfo:responseStreamDisconnected": 2 } }); return this.outputs.shift() ?? "{}"; }
+  async runTurn(threadId: string, prompt: string, signal?: AbortSignal): Promise<string> {
+    this.turns.push({ threadId, prompt });
+    this.signals.push(signal);
+    if (this.cancelOnCall === this.turns.length) {
+      await new Promise<void>((resolve) => signal?.addEventListener("abort", () => resolve(), { once: true }));
+      throw new AppServerClientError("SDK_TURN_CANCELLED", { method: "codex-sdk", finalStatus: "interrupted" });
+    }
+    if (this.failureOnCall === this.turns.length) throw new AppServerClientError("TURN_TIMEOUT", { method: "turn/start", retryCount: 2, retryCategoryCounts: { "codexErrorInfo:responseStreamDisconnected": 2 } });
+    return this.outputs.shift() ?? "{}";
+  }
   async deleteThread(threadId: string): Promise<void> { this.deletes.push(threadId); }
 }
 
@@ -113,4 +123,29 @@ test("rejects invalid portable relay input before starting an agent", async () =
   const agent = new FakeRelayAgent([]);
   await assert.rejects(runLocalRelay(agent, { ...relayRequest(), mission: "" }), (error) => error instanceof RelayFailure && error.code === "INVALID_RELAY_MISSION");
   assert.equal(agent.starts.length, 0);
+});
+
+test("cancels before starting any relay thread", async () => {
+  const controller = new AbortController();
+  controller.abort();
+  const agent = new FakeRelayAgent([]);
+  await assert.rejects(runLocalRelay(agent, relayRequest(), { signal: controller.signal }), (error) => error instanceof RelayFailure && error.code === "RELAY_CANCELLED");
+  assert.deepEqual(agent.starts, []);
+});
+
+test("cancels during a transmission, preserves stage and deletes both threads", async () => {
+  const agent = new FakeRelayAgent(fixtureMessages().map((message) => JSON.stringify(message)), undefined, 2);
+  const controller = new AbortController();
+  const pending = runLocalRelay(agent, relayRequest(), { signal: controller.signal });
+  setTimeout(() => controller.abort(), 10);
+  await assert.rejects(pending, (error) => {
+    assert.ok(error instanceof RelayFailure);
+    assert.equal(error.code, "SDK_TURN_CANCELLED");
+    assert.equal(error.relayStage, "CODEX_REPORT");
+    assert.equal(error.completedTransmissions, 1);
+    return true;
+  });
+  assert.equal(agent.signals[1], controller.signal);
+  assert.deepEqual(agent.deletes, ["codex-thread", "work-thread"]);
+  assert.equal(agent.turns.length, 2);
 });

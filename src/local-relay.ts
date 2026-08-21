@@ -1,11 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { AppServerClientError, type SafeTurnDiagnostic } from "./app-server-client.js";
-import { createMessage, MessageContractError, MessageLedger, MESSAGE_OUTPUT_SCHEMA, parseMessageText, type MessageEnvelope } from "./message-contract.js";
+import { createMessage, MAX_ROUTE_BYTES, MessageContractError, MessageLedger, MESSAGE_OUTPUT_SCHEMA, parseMessageText, type MessageEnvelope } from "./message-contract.js";
 
 export const DEFAULT_WORK_LOCAL_INSTRUCTIONS = "You are WORK_LOCAL, a local review role distinct from the current user conversation. Do not change files, act as the user, or invent user decisions. Return exactly one JSON message envelope and no markdown.";
 export const DEFAULT_CODEX_LOCAL_INSTRUCTIONS = "You are CODEX_LOCAL, a local technical role. Stay read-only, do not change files, and do not invent user authority. Return exactly one JSON message envelope and no markdown.";
 
-const MAX_ROUTE_BYTES = 256;
 const MAX_MISSION_BYTES = 16_384;
 const MAX_INSTRUCTIONS_BYTES = 16_384;
 
@@ -21,8 +20,12 @@ export interface LocalRelayRequest {
 
 export interface RelayAgent {
   startThread(instructions: string, cwd: string): Promise<string>;
-  runTurn(threadId: string, prompt: string): Promise<string>;
+  runTurn(threadId: string, prompt: string, signal?: AbortSignal): Promise<string>;
   deleteThread(threadId: string): Promise<void>;
+}
+
+export interface LocalRelayRunOptions {
+  signal?: AbortSignal;
 }
 
 export interface RelayResult {
@@ -117,8 +120,10 @@ function assertExpected(message: MessageEnvelope, expected: { sessionId: string;
   }
 }
 
-export async function runLocalRelay(agent: RelayAgent, relayRequest: LocalRelayRequest): Promise<RelayResult> {
+export async function runLocalRelay(agent: RelayAgent, relayRequest: LocalRelayRequest, options: LocalRelayRunOptions = {}): Promise<RelayResult> {
   const request = validateLocalRelayRequest(relayRequest);
+  const signal = options.signal;
+  if (signal?.aborted) throw new RelayFailure("RELAY_CANCELLED");
   const { cwd, sessionId } = request;
   const ledger = new MessageLedger();
   let workThreadId: string | undefined;
@@ -134,15 +139,17 @@ export async function runLocalRelay(agent: RelayAgent, relayRequest: LocalRelayR
   const executeTransmission = async (stage: RelayStage, threadId: string, prompt: string, failureCode: string): Promise<MessageEnvelope> => {
     relayStage = stage;
     try {
-      const message = parseMessageText(await agent.runTurn(threadId, prompt));
+      if (signal?.aborted) throw new RelayFailure("RELAY_CANCELLED", [], [], [], [], undefined, stage, completedTransmissions);
+      const message = parseMessageText(await agent.runTurn(threadId, prompt, signal));
       completedTransmissions += 1;
       return message;
     } catch (error) {
-      throw new RelayFailure(error instanceof MessageContractError || error instanceof AppServerClientError ? error.code : failureCode, [], [], [], [], error instanceof AppServerClientError ? error.diagnostic : undefined, stage, completedTransmissions);
+      throw new RelayFailure(error instanceof RelayFailure || error instanceof MessageContractError || error instanceof AppServerClientError ? error.code : failureCode, [], [], [], [], error instanceof AppServerClientError ? error.diagnostic : undefined, stage, completedTransmissions);
     }
   };
 
   try {
+    if (signal?.aborted) throw new RelayFailure("RELAY_CANCELLED");
     workThreadId = await agent.startThread(request.workInstructions, cwd);
     codexThreadId = await agent.startThread(request.codexInstructions, cwd);
 

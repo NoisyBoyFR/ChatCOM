@@ -1,10 +1,10 @@
 {
   "project": "ChatCOM",
   "schema_version": "1.0",
-  "status": "OPERATIONAL_V0_3",
+  "status": "V1_RC_PROVEN",
   "source": "FitMyLife portable Work-Codex relay",
-  "current_scope": "Standalone reusable relay with a local STDIO MCP bridge, validated structured message return, configuration, CLI, Codex SDK adapter, App Server fallback, bounded diagnostics and deterministic tests",
+  "current_scope": "ChatCOM 1.0.0-rc.1 release candidate with a strict shared TypeScript and MCP contract, bounded end-to-end cancellation, validated three-message routing, multi-platform CI, authenticated real MCP proof and confirmed cleanup",
   "real_w1_operational": true,
   "real_mcp_bridge_operational": true,
-  "next_step": "Post-publication read-only inspection of v0.3.0 and prioritization of the next ChatCOM milestone"
+  "next_step": "Perform the post-merge read-only inspection, then request separate authorization for any formal v1.0 tag, GitHub Release or npm publication"
 }

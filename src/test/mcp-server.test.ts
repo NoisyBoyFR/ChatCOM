@@ -6,6 +6,7 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import {
   CHATCOM_MCP_INSTRUCTIONS,
+  CHATCOM_MCP_VERSION,
   CHATCOM_RELAY_TOOL,
   CHATCOM_VALIDATE_TOOL,
   createChatComMcpServer,
@@ -67,6 +68,7 @@ test("advertises focused tools with accurate safety annotations and server-wide 
     assert.equal(listed.tools[1]?.annotations?.openWorldHint, true);
     assert.equal(listed.tools.every((tool) => tool.annotations?.destructiveHint === false), true);
     assert.equal(client.getInstructions(), CHATCOM_MCP_INSTRUCTIONS);
+    assert.equal(client.getServerVersion()?.version, CHATCOM_MCP_VERSION);
     assert.match(client.getInstructions() ?? "", /explicit user authorization/u);
   } finally {
     await client.close();
@@ -132,6 +134,77 @@ test("returns all validated envelopes through structured MCP content while keepi
     assert.deepEqual((result.structuredContent as { messages: MessageEnvelope[] }).messages, expectedMessages);
     assert.equal(textContent(result), "CHATCOM_RELAY kind=SUCCESS transmissions=3 cleanup=CONFIRMED");
     assert.equal(textContent(result).includes("LEAK_SENTINEL"), false);
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
+test("passes the MCP request signal to the relay dependency", async () => {
+  let receivedSignal: AbortSignal | undefined;
+  const expectedMessages = messages();
+  const dependencies: ChatComMcpDependencies = {
+    loadConfig: async () => config(),
+    runRelay: async (_config, _timeoutMs, signal) => {
+      receivedSignal = signal;
+      return {
+        relay: {
+          sessionId,
+          threadIds: [],
+          deletedThreadIds: [],
+          messages: expectedMessages,
+          messageIds: expectedMessages.map(({ message_id }) => message_id),
+          sequence: [1, 2, 3],
+          transmissions: 3,
+          completedTransmissions: 3,
+          stoppedBeforeSecondCodexMission: true,
+          cleanupFailures: [],
+          cleanupErrors: [],
+        },
+        cleanup: "CONFIRMED",
+      };
+    },
+  };
+  const { server, client } = await connectedClient(dependencies);
+  try {
+    const controller = new AbortController();
+    const result = await client.callTool({ name: CHATCOM_RELAY_TOOL, arguments: { config_path: "relay.json" } }, undefined, { signal: controller.signal });
+    assert.equal(result.isError, undefined);
+    assert.ok(receivedSignal instanceof AbortSignal);
+    assert.equal(receivedSignal?.aborted, false);
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
+test("rejects a relay session mismatch without exposing envelope content", async () => {
+  const expectedMessages = messages();
+  const dependencies: ChatComMcpDependencies = {
+    loadConfig: async () => config(),
+    runRelay: async () => ({
+      relay: {
+        sessionId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        threadIds: [],
+        deletedThreadIds: [],
+        messages: expectedMessages,
+        messageIds: expectedMessages.map(({ message_id }) => message_id),
+        sequence: [1, 2, 3],
+        transmissions: 3,
+        completedTransmissions: 3,
+        stoppedBeforeSecondCodexMission: true,
+        cleanupFailures: [],
+        cleanupErrors: [],
+      },
+      cleanup: "CONFIRMED",
+    }),
+  };
+  const { server, client } = await connectedClient(dependencies);
+  try {
+    const result = await client.callTool({ name: CHATCOM_RELAY_TOOL, arguments: { config_path: "relay.json" } });
+    assert.equal(result.isError, true);
+    assert.equal(textContent(result), "CHATCOM_MCP kind=FAILURE code=RELAY_SESSION_MISMATCH");
+    assert.equal(JSON.stringify(result).includes("LEAK_SENTINEL"), false);
   } finally {
     await client.close();
     await server.close();

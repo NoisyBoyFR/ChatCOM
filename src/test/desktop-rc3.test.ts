@@ -58,12 +58,21 @@ test("RC.3 renderer covers display settings and keyboard escape paths", async ()
   assert.match(renderer, /prefers-reduced-motion|reduceMotion/u);
 });
 
+test("RC.5 Desktop exposes host, MCP, Codex, mode and cleanup status", async () => {
+  const html = await readFile("apps/desktop/renderer/index.html", "utf8");
+  const renderer = await readFile("apps/desktop/renderer/renderer.ts", "utf8");
+  for (const id of ["work-host-status", "mcp-status", "codex-local-status", "communication-mode", "bridge-cleanup-status"]) assert.match(html, new RegExp(`id="${id}"`, "u"));
+  assert.match(renderer, /WORK_HOST/u);
+  assert.match(renderer, /bridge-cleanup-status/u);
+  assert.match(html, /data-i18n="localSimulation"/u);
+});
+
 test("RC.3 artifact naming and manifest are constrained", async () => {
   const workflow = await readFile(".github/workflows/ci.yml", "utf8");
   const signingWorkflow = await readFile(".github/workflows/sign-windows.yml", "utf8");
   const signatureVerifier = await readFile("scripts/verify-windows-signature.ps1", "utf8");
   const verifier = await readFile("scripts/verify-desktop-package.mjs", "utf8");
-  assert.match(workflow, /chatcom-desktop-1\.0\.0-rc\.4-windows-x64-local-validation/u);
+  assert.match(workflow, /chatcom-desktop-1\.0\.0-rc\.5-windows-x64-local-validation/u);
   assert.match(workflow, /actions\/upload-artifact@[0-9a-f]{40}/u);
   for (const key of ["version", "platform", "architecture", "filename", "size", "sha256", "codexRuntimeVersion", "signature"]) assert.match(verifier, new RegExp(`${key}`, "u"));
   assert.match(verifier, /UNSIGNED/u);

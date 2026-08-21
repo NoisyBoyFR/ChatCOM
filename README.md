@@ -11,9 +11,9 @@
 
 [![Download ChatCOM Desktop](https://img.shields.io/badge/Download-ChatCOM_Desktop_for_Windows-0078D4?style=for-the-badge&logo=windows11&logoColor=white)](https://github.com/NoisyBoyFR/ChatCOM/releases/download/v1.0.0-rc.3/ChatCOM-Desktop-1.0.0-rc.3-Setup.exe)
 
-**Current source candidate:** `1.0.0-rc.4` · Windows x64 · the protected Artifact Signing workflow is ready, but public updates remain disabled until the external identity and certificate profile are configured
+**Current source candidate:** `1.0.0-rc.5` · Windows x64 · the protected Artifact Signing workflow is ready, but public updates remain disabled until the external identity and certificate profile are configured
 
-## RC.4 publication and signing gate
+## RC.5 publication and signing gate
 
 RC.4 is a source candidate, not a public release. Windows publication is
 blocked until the owner completes the SignPath Foundation Open Source Code
@@ -36,11 +36,17 @@ ChatCOM coordinates a bounded exchange between two local roles:
 WORK_LOCAL ── MISSION ──▶ CODEX_LOCAL
 WORK_LOCAL ◀── REPORT ─── CODEX_LOCAL
 WORK_LOCAL ─ NEXT_PROMPT ▶ CODEX_LOCAL
+
+WORK_HOST ── MISSION ──▶ CODEX_LOCAL
+WORK_HOST ◀── REPORT ─── CODEX_LOCAL
+WORK_HOST ─ NEXT_PROMPT ──▶ CODEX_LOCAL
 ```
 
 The user selects a project and mission, watches the exchange, and keeps final authority. Each relay is read-only, contains exactly three validated transmissions, stops before a second Codex mission, and requires confirmed cleanup.
 
 `WORK_LOCAL` is an internal review role. It is not a remote ChatGPT Work session and ChatCOM does not impersonate the user.
+
+The `WORK_HOST` route is the only route eligible for a real WORK ↔ Codex proof. The MCP host manages WORK authentication; ChatCOM never reads cookies, tokens, API keys, or browser profiles. The legacy `WORK_LOCAL` route is `LOCAL_SIMULATION` and is never reported as a real host proof.
 
 ## Desktop highlights
 
@@ -54,6 +60,7 @@ The user selects a project and mission, watches the exchange, and keeps final au
 - no-model preflight for the runtime, authentication, project, and read-only policy;
 - versioned, validated preferences that never store mission or message content;
 - bounded diagnostics without prompts, responses, credentials, thread IDs, or stacks.
+- Desktop communication status distinguishes `WORK_HOST`, `CODEX_LOCAL`, `USER`, `REAL_WORK_HOST`, and `LOCAL_SIMULATION`.
 
 ## Download and install on Windows
 
@@ -123,7 +130,7 @@ The expected installer is:
 out-desktop/make/squirrel.windows/x64/ChatCOM-Desktop-1.0.0-rc.4-Setup.exe
 ```
 
-`npm run verify` performs the build, core and Desktop typechecks, 126 deterministic tests, example configuration validation, production dependency audit, and npm package dry-run. Diagnostic commands may contact a real Codex runtime and require explicit authorization.
+`npm run verify` performs the build, core and Desktop typechecks, deterministic tests, example configuration validation, production dependency audit, and npm package dry-run. Diagnostic commands may contact a real Codex runtime and require explicit authorization.
 
 ## CLI configuration
 
@@ -153,10 +160,20 @@ node .\dist\portable-cli.js run --config .\relay.config.example.json --timeout-m
 
 ## MCP bridge
 
-ChatCOM exposes two STDIO MCP tools:
+ChatCOM exposes four STDIO MCP tools:
 
 - `chatcom_validate_config` validates configuration without starting Codex;
-- `chatcom_run_relay` runs one authorized, bounded relay.
+- `chatcom_work_open` accepts one validated `WORK_HOST` MISSION, runs one read-only Codex report, and returns `REPORT` while leaving the exchange open;
+- `chatcom_work_complete` accepts exactly one `WORK_HOST` `NEXT_PROMPT`, deletes the single Codex thread, closes the client, and confirms cleanup;
+- `chatcom_run_relay` remains a compatibility tool named `LOCAL_SIMULATION`, not a real WORK proof.
+
+The real protocol is:
+
+1. The genuine WORK host calls `chatcom_work_open` with `MISSION`.
+2. ChatCOM returns `REPORT`; WORK analyzes it in the host session.
+3. The same host calls `chatcom_work_complete` with `NEXT_PROMPT`.
+
+The final response is successful only with exactly three transmissions and `cleanup=CONFIRMED`. A missing WORK host is not replaced by Codex and yields `READY_FOR_WORK_PROOF`.
 
 Build ChatCOM, copy [`.codex/config.toml.example`](.codex/config.toml.example) into a trusted Codex configuration, replace the placeholders with absolute paths, and restart the MCP host. Keep the relay tool in prompt-approval mode.
 

@@ -87,6 +87,7 @@ function renderSnapshot(next: ConversationSnapshot): void {
   $("cycle").textContent = `${next.cycle} / ${next.maxCycles}`;
   $("elapsed").textContent = `${Math.floor(next.elapsedMs / 1000)} s`;
   $("cleanup").textContent = next.cleanup;
+  $("bridge-cleanup-status").textContent = next.cleanup;
   $("session-id").textContent = next.currentSessionId ?? "—";
   const running = ["RUNNING", "PAUSE_REQUESTED", "STOPPING"].includes(next.state);
   renderStartButton();
@@ -104,12 +105,13 @@ function renderPreflight(next: import("../../../src/desktop/preflight.js").Prefl
   $("auth-status").textContent = next.authentication.status;
   $("project-status").textContent = next.project.status;
   $("security-status").textContent = t("readOnly");
+  $("codex-local-status").textContent = next.authentication.status === "READY" ? t("codexReady") : next.authentication.status === "ERROR" ? t("codexError") : t("codexAuthRequired");
   renderStartButton();
   configurationStatus.textContent = next.canStart ? t("preflightReady") : t("preflightRequired");
   configurationStatus.className = next.canStart ? "hint" : "hint error";
 }
 function renderTransmission(cycle: number, message: Extract<ConversationEvent, { kind: "transmission" }>["message"]): void {
-  const card = document.createElement("article"); card.className = `message-card ${message.sender === "WORK_LOCAL" ? "work" : "codex"}`;
+  const card = document.createElement("article"); card.className = `message-card ${message.sender === "WORK_HOST" ? "work-host" : message.sender === "WORK_LOCAL" ? "work" : message.sender === "USER" ? "user" : "codex"}`;
   const heading = document.createElement("div"); heading.className = "message-heading"; heading.textContent = `${message.sender} → ${message.recipient} · ${message.type} · ${t("cycle")} ${cycle}`;
   const meta = document.createElement("div"); meta.className = "message-meta"; meta.textContent = `${message.created_at} · sequence ${message.sequence} · ${message.delivery_status}`;
   const content = document.createElement("details"); const summary = document.createElement("summary"); summary.textContent = t("showContent"); const body = document.createElement("p"); body.textContent = message.content; content.append(summary, body); card.append(heading, meta, content); timeline.append(card);

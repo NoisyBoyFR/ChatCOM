@@ -110,3 +110,16 @@ Windows packaging metadata records `Setup.exe`, the full `.nupkg`, `RELEASES`,
 hashes, channel, publisher, timestamp, and signature state. The current local
 state is `UNSIGNED`, so public automatic updates remain disabled. No new MCP,
 Codex, or relay proof was run for this work.
+
+## RC.5 WORK_HOST bridge readiness — no real proof claimed
+
+The RC.5 implementation adds the two-call `WORK_HOST` MCP protocol. Deterministic
+tests cover the validated MISSION, one Codex REPORT, host NEXT_PROMPT, exact
+three-transmission accounting, replay and route rejection, expiration,
+cancellation, bounded diagnostics, and confirmed or failed cleanup. The
+legacy local route remains explicitly `LOCAL_SIMULATION`.
+
+The current Codex session does not expose the new `chatcom_work_open` and
+`chatcom_work_complete` tools as a genuine WORK host. No false relay was
+started. The candidate status is `READY_FOR_WORK_PROOF`; a genuine MCP host
+must perform the single authorized real proof after MCP reload.

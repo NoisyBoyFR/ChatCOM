@@ -11,7 +11,7 @@
 
 [![Télécharger ChatCOM Desktop](https://img.shields.io/badge/Télécharger-ChatCOM_Desktop_pour_Windows-0078D4?style=for-the-badge&logo=windows11&logoColor=white)](https://github.com/NoisyBoyFR/ChatCOM/releases/download/v1.0.0-rc.3/ChatCOM-Desktop-1.0.0-rc.3-Setup.exe)
 
-**Version candidate du code source :** `1.0.0-rc.4` · Windows x64 · le workflow Artifact Signing protégé est prêt, mais les mises à jour publiques restent désactivées tant que l’identité externe et le profil de certificat ne sont pas configurés
+**Version candidate du code source :** `1.0.0-rc.5` · Windows x64 · le workflow Artifact Signing protégé est prêt, mais les mises à jour publiques restent désactivées tant que l’identité externe et le profil de certificat ne sont pas configurés
 
 ## Qu’est-ce que ChatCOM ?
 
@@ -21,11 +21,17 @@ ChatCOM organise un échange borné entre deux rôles locaux :
 WORK_LOCAL ── MISSION ──▶ CODEX_LOCAL
 WORK_LOCAL ◀── REPORT ─── CODEX_LOCAL
 WORK_LOCAL ─ NEXT_PROMPT ▶ CODEX_LOCAL
+
+WORK_HOST ── MISSION ──▶ CODEX_LOCAL
+WORK_HOST ◀── REPORT ─── CODEX_LOCAL
+WORK_HOST ─ NEXT_PROMPT ──▶ CODEX_LOCAL
 ```
 
 L’utilisateur choisit un projet et une mission, observe la conversation et conserve l’autorité finale. Chaque relais reste en lecture seule, contient exactement trois transmissions validées, s’arrête avant une seconde mission Codex et exige un nettoyage confirmé.
 
 `WORK_LOCAL` est un rôle interne de contrôle. Ce n’est pas une session ChatGPT Work distante et ChatCOM n’agit jamais à la place de l’utilisateur.
+
+La route `WORK_HOST` est la seule éligible à une preuve WORK ↔ Codex réelle. L’hôte MCP gère l’authentification WORK ; ChatCOM ne lit jamais les cookies, jetons, clés API ou profils navigateur. L’ancienne route `WORK_LOCAL` est nommée `LOCAL_SIMULATION` et ne constitue jamais une preuve réelle.
 
 ## Points forts de l’interface Desktop
 
@@ -39,6 +45,7 @@ L’utilisateur choisit un projet et une mission, observe la conversation et con
 - préférences versionnées et validées, sans mission ni contenu de conversation ;
 - paramètres édités dans un brouillon temporaire : « Sauvegarder » persiste et ferme, tandis que « Annuler » abandonne les changements ;
 - diagnostics bornés sans prompt, réponse, identifiant de thread, secret ni stack trace.
+- l’état Desktop distingue `WORK_HOST`, `CODEX_LOCAL`, `USER`, `REAL_WORK_HOST` et `LOCAL_SIMULATION`.
 
 ## Télécharger et installer sur Windows
 
@@ -109,7 +116,7 @@ Installateur attendu :
 out-desktop/make/squirrel.windows/x64/ChatCOM-Desktop-1.0.0-rc.4-Setup.exe
 ```
 
-`npm run verify` exécute le build, les vérifications TypeScript du noyau et de Desktop, 126 tests déterministes, la validation de configuration, l’audit des dépendances de production et le contrôle du paquet npm. Les commandes de diagnostic peuvent contacter un runtime Codex réel et nécessitent une autorisation explicite.
+`npm run verify` exécute le build, les vérifications TypeScript du noyau et de Desktop, les tests déterministes, la validation de configuration, l’audit des dépendances de production et le contrôle du paquet npm. Les commandes de diagnostic peuvent contacter un runtime Codex réel et nécessitent une autorisation explicite.
 
 ## Configuration de la CLI
 
@@ -139,10 +146,20 @@ node .\dist\portable-cli.js run --config .\relay.config.example.json --timeout-m
 
 ## Pont MCP
 
-ChatCOM expose deux outils MCP STDIO :
+ChatCOM expose quatre outils MCP STDIO :
 
 - `chatcom_validate_config` valide la configuration sans démarrer Codex ;
-- `chatcom_run_relay` exécute un relais borné après autorisation.
+- `chatcom_work_open` reçoit une `MISSION` `WORK_HOST` validée, obtient un rapport Codex en lecture seule et laisse l’échange ouvert ;
+- `chatcom_work_complete` reçoit exactement un `NEXT_PROMPT` `WORK_HOST`, supprime le thread Codex unique, ferme le client et confirme le nettoyage ;
+- `chatcom_run_relay` reste un outil de compatibilité nommé `LOCAL_SIMULATION` et ne constitue pas une preuve WORK réelle.
+
+Le protocole réel est le suivant :
+
+1. Le véritable hôte WORK appelle `chatcom_work_open` avec `MISSION`.
+2. ChatCOM retourne `REPORT` ; WORK l’analyse dans sa session hôte.
+3. Le même hôte appelle `chatcom_work_complete` avec `NEXT_PROMPT`.
+
+La réussite finale exige exactement trois transmissions et `cleanup=CONFIRMED`. ChatCOM ne lit jamais les cookies, jetons, clés API ou profils navigateur de WORK. Sans véritable hôte WORK, le verdict est `READY_FOR_WORK_PROOF`, jamais une preuve réelle simulée.
 
 Compilez ChatCOM, copiez [`.codex/config.toml.example`](.codex/config.toml.example) dans une configuration Codex de confiance, remplacez les chemins fictifs par des chemins absolus, puis redémarrez l’hôte MCP. Conservez le relais en mode d’approbation `prompt`.
 

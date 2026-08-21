@@ -23,5 +23,11 @@ integrity, artifact-signing workflow bypass, credential exposure, and
 diagnostic leakage. Unsupported modified binaries, unofficial update feeds,
 and intentionally authorized user actions may be out of scope.
 
+The `WORK_HOST` bridge labels the host connection as `MCP_HOST` and
+`WORK_AUTH_MANAGED_BY_HOST`; it does not cryptographically authenticate WORK
+itself. Real proof claims require the first `MISSION` to come from the genuine
+MCP host. The bridge rejects replayed sessions, route mismatches, and a second
+Codex mission, and fails closed when thread or client cleanup is unconfirmed.
+
 Supported-version and remediation decisions are recorded in the repository
 without publishing sensitive report details.

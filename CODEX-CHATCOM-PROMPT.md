@@ -56,6 +56,77 @@ CONTRAINTES PERMANENTES
 - N'ajoute aucune fonctionnalité annexe ou refonte générale non nécessaire.
 - Ne modifie jamais FitMyLife dans une mission ChatCOM.
 
+CORRECTION OBLIGATOIRE DE LA FENÊTRE PARAMÈTRES
+
+La fenêtre « Paramètres » contient actuellement un bug : cliquer sur le bouton
+« Fermer » ne ferme pas la fenêtre.
+
+Corrige ce comportement et remplace l’enregistrement automatique par une
+validation explicite.
+
+Comportement attendu :
+
+- remplacer le bouton principal « Fermer » par « Sauvegarder » ;
+- ajouter un bouton secondaire « Annuler » ;
+- les changements restent temporaires tant que l’utilisateur ne clique pas sur
+  « Sauvegarder » ;
+- « Sauvegarder » valide les valeurs, les enregistre durablement puis ferme la
+  fenêtre ;
+- « Annuler » ferme la fenêtre sans enregistrer les modifications ;
+- la touche Entrée déclenche « Sauvegarder » lorsque cela ne perturbe pas un
+  champ ;
+- la touche Échap déclenche « Annuler » ;
+- après une sauvegarde réussie, afficher brièvement « Paramètres enregistrés » ;
+- si l’enregistrement échoue, garder la fenêtre ouverte et afficher une erreur
+  compréhensible sans perdre les choix saisis ;
+- les préférences sauvegardées doivent être restaurées après fermeture et
+  redémarrage complet de ChatCOM ;
+- empêcher les doubles clics et les sauvegardes concurrentes ;
+- désactiver temporairement les boutons pendant l’enregistrement ;
+- aucun élément invisible, overlay, problème de z-index ou pointer-events ne doit
+  empêcher les clics ;
+- le focus clavier doit rester dans la fenêtre des paramètres lorsqu’elle est
+  ouverte puis revenir sur le bouton qui l’a ouverte après fermeture ;
+- aucun changement ne doit être appliqué en arrière-plan après « Annuler ».
+
+Traductions obligatoires dans les quatre langues :
+
+- français : Sauvegarder / Annuler / Paramètres enregistrés ;
+- anglais : Save / Cancel / Settings saved ;
+- chinois simplifié : 保存 / 取消 / 设置已保存 ;
+- russe : Сохранить / Отмена / Настройки сохранены.
+
+Ajoute des tests automatisés couvrant au minimum :
+
+- ouverture et fermeture répétées de la fenêtre ;
+- clic réel sur Sauvegarder ;
+- clic réel sur Annuler ;
+- sauvegarde puis réouverture ;
+- persistance après redémarrage ;
+- abandon des modifications ;
+- Entrée et Échap ;
+- échec de sauvegarde ;
+- clic rapide répété ;
+- absence de gestionnaires d’événements dupliqués ;
+- thèmes clair et sombre ;
+- modes fenêtre normale, maximisée et plein écran ;
+- les quatre langues ;
+- différentes tailles de texte ;
+- navigation entièrement au clavier.
+
+Effectue aussi un test Electron réel de la fenêtre empaquetée. Ne considère pas
+le problème comme corrigé uniquement avec des tests unitaires : prouve qu’un
+clic utilisateur ferme réellement la fenêtre.
+
+Dans le rapport final à WORK, ajoute :
+
+- la cause racine exacte du bouton « Fermer » inactif ;
+- les composants et gestionnaires corrigés ;
+- la preuve que Sauvegarder persiste les préférences ;
+- la preuve qu’Annuler ne les modifie pas ;
+- les résultats des tests clavier, souris et redémarrage ;
+- une capture ou une description précise de l’interface corrigée.
+
 VALIDATION MINIMALE APRÈS MODIFICATION
 
 Exécute `npm run verify`, puis les preuves réelles explicitement autorisées par

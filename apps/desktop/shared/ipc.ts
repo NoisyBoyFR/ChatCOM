@@ -1,6 +1,7 @@
 import type { ConversationEvent, ConversationSnapshot } from "../../../src/conversation/orchestrator.js";
 import type { PreflightResult } from "../../../src/desktop/preflight.js";
-import type { DesktopPreferences, TextSize, Theme, WindowMode } from "../../../src/desktop/preferences.js";
+import type { DesktopPreferences, TextSize, Theme, UpdateChannel, WindowMode } from "../../../src/desktop/preferences.js";
+import type { UpdateSnapshot } from "../../../src/desktop/updater.js";
 
 export const DESKTOP_IPC_CHANNELS = {
   getState: "desktop:get-state",
@@ -16,10 +17,14 @@ export const DESKTOP_IPC_CHANNELS = {
   preflight: "desktop:preflight",
   submitDecision: "desktop:submit-decision",
   updatePreferences: "desktop:update-preferences",
+  updateState: "desktop:update-state",
+  checkForUpdates: "desktop:check-for-updates",
+  restartAndInstall: "desktop:restart-and-install",
+  updateEvent: "desktop:update-event",
   event: "desktop:event",
 } as const;
 
-export type { DesktopPreferences, TextSize, Theme, WindowMode } from "../../../src/desktop/preferences.js";
+export type { DesktopPreferences, TextSize, Theme, UpdateChannel, WindowMode } from "../../../src/desktop/preferences.js";
 
 export interface DesktopStateResponse {
   snapshot: ConversationSnapshot;
@@ -46,7 +51,11 @@ export interface DesktopApi {
   resume(): Promise<ConversationSnapshot>;
   submitDecision(response: string): Promise<ConversationSnapshot>;
   preflight(): Promise<PreflightResult>;
-  updatePreferences(input: Partial<Pick<DesktopPreferences, "language" | "theme" | "windowMode" | "textSize" | "reduceMotion" | "autoScroll">>): Promise<DesktopPreferences>;
+  updatePreferences(input: Partial<Pick<DesktopPreferences, "language" | "theme" | "windowMode" | "textSize" | "reduceMotion" | "autoScroll" | "autoUpdateEnabled" | "updateChannel">>): Promise<DesktopPreferences>;
+  getUpdateState(): Promise<UpdateSnapshot>;
+  checkForUpdates(): Promise<UpdateSnapshot>;
+  restartAndInstall(): Promise<void>;
+  onUpdate(listener: (snapshot: UpdateSnapshot) => void): () => void;
   stop(): Promise<ConversationSnapshot>;
   copyDiagnostic(): Promise<{ copied: boolean; diagnostic?: string }>;
   exportReport(): Promise<{ canceled: boolean; path?: string }>;

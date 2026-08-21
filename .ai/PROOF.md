@@ -99,3 +99,14 @@ CHATCOM_MCP_PROOF kind=SUCCESS code=OK tools=2 transmissions=3 cleanup=CONFIRMED
 - diff whitespace validation: passed;
 - real proof attempts used: 1 of the authorized maximum of 2;
 - runtime code was not changed after the successful proof.
+
+## Desktop RC.4 updater candidate — local only
+
+The updater candidate has not been published and has not performed a real
+update download. Deterministic tests cover the main-process controller,
+Squirrel first-run delay, six-hour schedule, mutex, downgrade and channel
+guards, typed IPC, relay cleanup gating, and fail-closed unsigned policy.
+Windows packaging metadata records `Setup.exe`, the full `.nupkg`, `RELEASES`,
+hashes, channel, publisher, timestamp, and signature state. The current local
+state is `UNSIGNED`, so public automatic updates remain disabled. No new MCP,
+Codex, or relay proof was run for this work.

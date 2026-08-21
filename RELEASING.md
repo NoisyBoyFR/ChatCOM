@@ -64,3 +64,27 @@ pull request.
 
 After publication, verify the tag, release artifacts, checksums, and main-branch
 CI, then update the durable proof without exposing sensitive runtime content.
+# Auto-update signing gate
+
+The RC.4 updater is implemented locally but remains fail-closed. Windows
+automatic updates are enabled only for a packaged x64 build whose Setup.exe,
+full Squirrel package, and `RELEASES` manifest have a valid ChatCOM
+Authenticode signature with a trusted publisher and timestamp. The current
+validation artifacts are `UNSIGNED`, so CI may retain them as validation
+artifacts but must not publish them as an update release. The only permitted
+public source is the official Electron update service for
+`NoisyBoyFR/ChatCOM`; no private update server, certificate bypass, Defender
+disablement, or automatic GitHub Release is allowed.
+
+The generated Windows set must contain `Setup.exe`, `*-full.nupkg`,
+`RELEASES`, `SHA256SUMS.txt`, and a manifest recording version, channel,
+platform, architecture, sizes, hashes, signature state, publisher, timestamp,
+and minimum updater version. Hashes are generated only after signing in a
+future authorized signed pipeline.
+
+Stable updates use `update.electronjs.org`, which only considers published
+non-draft, non-pre-release GitHub Releases. Preview updates therefore use a
+separate static Squirrel layout at `/preview/win32/x64`; this layout is only
+validated by the local synthetic feed until a separately authorized hosting
+deployment exists. Stable never consumes RC artefacts, and Preview never
+silently downgrades.

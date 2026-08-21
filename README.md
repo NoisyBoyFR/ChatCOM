@@ -11,7 +11,7 @@
 
 [![Download ChatCOM Desktop](https://img.shields.io/badge/Download-ChatCOM_Desktop_for_Windows-0078D4?style=for-the-badge&logo=windows11&logoColor=white)](https://github.com/NoisyBoyFR/ChatCOM/releases/download/v1.0.0-rc.3/ChatCOM-Desktop-1.0.0-rc.3-Setup.exe)
 
-**Current candidate:** `1.0.0-rc.3` · Windows x64 · unsigned pre-release
+**Current local candidate:** `1.0.0-rc.4` · Windows x64 · unsigned pre-release; automatic public updates are disabled until signed artifacts are available
 
 ## What is ChatCOM?
 
@@ -35,11 +35,24 @@ The user selects a project and mission, watches the exchange, and keeps final au
 - System, Light, and Dark themes;
 - normal, maximized, and fullscreen modes (`F11` / `Escape`);
 - text-size, reduced-motion, and timeline auto-scroll preferences;
+- settings use a temporary draft: `Save` persists and closes, while `Cancel` discards changes;
 - no-model preflight for the runtime, authentication, project, and read-only policy;
 - versioned, validated preferences that never store mission or message content;
 - bounded diagnostics without prompts, responses, credentials, thread IDs, or stacks.
 
 ## Download and install on Windows
+
+The public download links below still point to the last published RC.3. RC.4 is
+local validation work only: it must not be published or used for automatic
+updates while its Windows artifacts are unsigned. Stable uses Electron's
+main-process `autoUpdater` with the official public
+`update.electronjs.org/NoisyBoyFR/ChatCOM` source. Preview uses a separate
+static Squirrel feed under the controlled GitHub Pages layout
+`/preview/win32/x64`; that feed is designed and tested locally but is not
+deployed here. The updater checks after the Squirrel first-run window and then
+every six hours, downloads in the background, and never forces a restart during
+a relay. Settings expose an enabled switch and Stable/Preview channel; a
+restart is offered only after confirmed cleanup.
 
 1. Download **[ChatCOM-Desktop-1.0.0-rc.3-Setup.exe](https://github.com/NoisyBoyFR/ChatCOM/releases/download/v1.0.0-rc.3/ChatCOM-Desktop-1.0.0-rc.3-Setup.exe)**.
 2. Optionally download [SHA256SUMS.txt](https://github.com/NoisyBoyFR/ChatCOM/releases/download/v1.0.0-rc.3/SHA256SUMS.txt) and verify the installer.
@@ -68,7 +81,7 @@ The complete machine-readable build information is available in [desktop-build-m
 - IPC channels and senders are allowlisted and validated;
 - diagnostics expose bounded status metadata only.
 
-The authenticated MCP relay has completed a real three-transmission proof with confirmed cleanup. The RC.3 Desktop interface, localization, settings, and installer are covered by 109 deterministic tests and multi-platform CI; a separate real GUI relay proof has not yet been claimed. See [`.ai/PROOF.md`](.ai/PROOF.md).
+The authenticated MCP relay has completed a real three-transmission proof with confirmed cleanup. The RC.4 updater architecture, RC.3 Desktop interface, localization, settings, and installer are covered by 123 deterministic tests and multi-platform CI; a separate real GUI relay proof has not yet been claimed. See [`.ai/PROOF.md`](.ai/PROOF.md).
 
 ## Developer quick start
 
@@ -87,10 +100,10 @@ npm run desktop:make
 The expected installer is:
 
 ```text
-out-desktop/make/squirrel.windows/x64/ChatCOM-Desktop-1.0.0-rc.3-Setup.exe
+out-desktop/make/squirrel.windows/x64/ChatCOM-Desktop-1.0.0-rc.4-Setup.exe
 ```
 
-`npm run verify` performs the build, core and Desktop typechecks, 109 deterministic tests, example configuration validation, production dependency audit, and npm package dry-run. Diagnostic commands may contact a real Codex runtime and require explicit authorization.
+`npm run verify` performs the build, core and Desktop typechecks, 123 deterministic tests, example configuration validation, production dependency audit, and npm package dry-run. Diagnostic commands may contact a real Codex runtime and require explicit authorization.
 
 ## CLI configuration
 

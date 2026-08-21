@@ -11,7 +11,7 @@
 
 [![Télécharger ChatCOM Desktop](https://img.shields.io/badge/Télécharger-ChatCOM_Desktop_pour_Windows-0078D4?style=for-the-badge&logo=windows11&logoColor=white)](https://github.com/NoisyBoyFR/ChatCOM/releases/download/v1.0.0-rc.3/ChatCOM-Desktop-1.0.0-rc.3-Setup.exe)
 
-**Version candidate actuelle :** `1.0.0-rc.3` · Windows x64 · préversion non signée
+**Version candidate locale actuelle :** `1.0.0-rc.4` · Windows x64 · préversion non signée ; les mises à jour publiques restent désactivées tant que les artefacts ne sont pas signés
 
 ## Qu’est-ce que ChatCOM ?
 
@@ -37,9 +37,23 @@ L’utilisateur choisit un projet et une mission, observe la conversation et con
 - taille du texte, réduction des animations et défilement automatique ;
 - pré-vérification sans modèle du runtime, de l’authentification, du projet et du mode lecture seule ;
 - préférences versionnées et validées, sans mission ni contenu de conversation ;
+- paramètres édités dans un brouillon temporaire : « Sauvegarder » persiste et ferme, tandis que « Annuler » abandonne les changements ;
 - diagnostics bornés sans prompt, réponse, identifiant de thread, secret ni stack trace.
 
 ## Télécharger et installer sur Windows
+
+Les liens publics ci-dessous pointent encore vers la dernière RC.3 publiée.
+La RC.4 reste un travail local de validation : elle ne doit pas être publiée
+et les mises à jour automatiques restent fermées tant que les artefacts
+Windows ne sont pas signés. Le canal Stable utilise `autoUpdater` dans le
+processus principal Electron avec la source officielle
+`update.electronjs.org/NoisyBoyFR/ChatCOM`. Le canal Préversion utilise un flux
+Squirrel statique distinct sous la structure GitHub Pages
+`/preview/win32/x64` ; ce flux est conçu et testé localement, mais n’est pas
+déployé ici. L’application attend la première exécution Squirrel puis vérifie
+toutes les six heures, télécharge en arrière-plan et ne force jamais un
+redémarrage pendant un relais. Le redémarrage n’est proposé qu’après nettoyage
+confirmé.
 
 1. Téléchargez **[ChatCOM-Desktop-1.0.0-rc.3-Setup.exe](https://github.com/NoisyBoyFR/ChatCOM/releases/download/v1.0.0-rc.3/ChatCOM-Desktop-1.0.0-rc.3-Setup.exe)**.
 2. Vous pouvez aussi télécharger [SHA256SUMS.txt](https://github.com/NoisyBoyFR/ChatCOM/releases/download/v1.0.0-rc.3/SHA256SUMS.txt) pour vérifier l’installateur.
@@ -68,7 +82,7 @@ Les informations de build lisibles par machine se trouvent dans [desktop-build-m
 - les canaux IPC et leurs émetteurs sont autorisés et validés explicitement ;
 - les diagnostics exposent uniquement des métadonnées bornées.
 
-Le relais MCP authentifié a déjà réussi une preuve réelle de trois transmissions avec nettoyage confirmé. L’interface Desktop RC.3, ses traductions, ses paramètres et son installateur sont couverts par 109 tests déterministes et une CI multiplateforme ; aucune nouvelle preuve réelle du relais depuis la GUI n’est encore revendiquée. Consultez [`.ai/PROOF.md`](.ai/PROOF.md).
+Le relais MCP authentifié a déjà réussi une preuve réelle de trois transmissions avec nettoyage confirmé. L’architecture de mise à jour RC.4, l’interface Desktop RC.3, ses traductions, ses paramètres et son installateur sont couverts par 123 tests déterministes et une CI multiplateforme ; aucune nouvelle preuve réelle du relais depuis la GUI n’est encore revendiquée. Consultez [`.ai/PROOF.md`](.ai/PROOF.md).
 
 ## Démarrage rapide pour les développeurs
 
@@ -87,10 +101,10 @@ npm run desktop:make
 Installateur attendu :
 
 ```text
-out-desktop/make/squirrel.windows/x64/ChatCOM-Desktop-1.0.0-rc.3-Setup.exe
+out-desktop/make/squirrel.windows/x64/ChatCOM-Desktop-1.0.0-rc.4-Setup.exe
 ```
 
-`npm run verify` exécute le build, les vérifications TypeScript du noyau et de Desktop, 109 tests déterministes, la validation de configuration, l’audit des dépendances de production et le contrôle du paquet npm. Les commandes de diagnostic peuvent contacter un runtime Codex réel et nécessitent une autorisation explicite.
+`npm run verify` exécute le build, les vérifications TypeScript du noyau et de Desktop, 123 tests déterministes, la validation de configuration, l’audit des dépendances de production et le contrôle du paquet npm. Les commandes de diagnostic peuvent contacter un runtime Codex réel et nécessitent une autorisation explicite.
 
 ## Configuration de la CLI
 

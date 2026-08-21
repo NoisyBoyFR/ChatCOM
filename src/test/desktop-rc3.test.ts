@@ -42,6 +42,8 @@ test("RC.3 renderer keeps visible copy in dictionaries", async () => {
 test("RC.3 window and preference controls stay behind typed IPC", async () => {
   const source = await readFile("apps/desktop/main/main.ts", "utf8");
   assert.match(source, /DESKTOP_IPC_CHANNELS\.updatePreferences/u);
+  assert.match(source, /findPackagedRenderer\(\)/u);
+  assert.match(source, /entry\.name === "index\.html"/u);
   assert.match(source, /setFullScreen/u);
   assert.match(source, /migratePreferences/u);
 });
@@ -59,7 +61,7 @@ test("RC.3 renderer covers display settings and keyboard escape paths", async ()
 test("RC.3 artifact naming and manifest are constrained", async () => {
   const workflow = await readFile(".github/workflows/ci.yml", "utf8");
   const verifier = await readFile("scripts/verify-desktop-package.mjs", "utf8");
-  assert.match(workflow, /chatcom-desktop-1\.0\.0-rc\.3-windows-x64/u);
+  assert.match(workflow, /chatcom-desktop-1\.0\.0-rc\.4-windows-x64/u);
   assert.match(workflow, /actions\/upload-artifact@[0-9a-f]{40}/u);
   for (const key of ["version", "platform", "architecture", "filename", "size", "sha256", "codexRuntimeVersion", "signature"]) assert.match(verifier, new RegExp(`${key}`, "u"));
   assert.match(verifier, /UNSIGNED/u);

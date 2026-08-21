@@ -4,7 +4,11 @@ All notable ChatCOM changes are recorded in this file. Dates use the ISO `YYYY-M
 
 ## [Unreleased]
 
-No unreleased changes.
+- Added a main-process Electron/Squirrel updater controller with a ten-second first-run delay, six-hour checks, serialized requests, background download, deferred restart, and relay-cleanup gating.
+- Added typed settings for automatic updates and Stable/Preview channels in all four locales.
+- Added closed-by-default policy checks for packaging, Windows x64, publisher, timestamped Authenticode signatures, repository, version, and downgrade protection.
+- Extended Windows validation metadata with Squirrel `Setup.exe`, full `.nupkg`, `RELEASES`, hashes, channel, and signature state.
+- Public automatic updates remain disabled until the signing pipeline is configured; no release or tag was created.
 
 ## [1.0.0-rc.3] - 2026-08-21
 

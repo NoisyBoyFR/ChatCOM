@@ -8,12 +8,15 @@ ChatCOM is a reusable local relay for structured communication between a Work re
 
 The reusable core has been separated from FitMyLife into its own project. Its configuration, message contract, routing, cleanup, bounded diagnostics, Codex SDK adapter, App Server fallback, and synthetic tests are available.
 
-ChatCOM v0.2.0 is operational for its bounded local workflow. An authenticated
+ChatCOM v0.3.0 adds a local STDIO MCP bridge to the operational bounded relay.
+Work can validate a configuration and invoke one explicitly authorized relay
+through structured MCP tools without copying model content through terminal
+diagnostics. An authenticated
 Codex SDK lifecycle, a complete three-transmission Work ↔ Codex relay, and the
-App Server fallback have succeeded with confirmed cleanup. The safe evidence is
-recorded in [`.ai/PROOF.md`](.ai/PROOF.md).
+App Server fallback have succeeded with confirmed cleanup. MCP proof is recorded
+alongside the earlier runtime evidence in [`.ai/PROOF.md`](.ai/PROOF.md).
 
-The operational baseline passes 66 deterministic tests, build, typecheck,
+The operational baseline passes 71 deterministic tests, build, typecheck,
 configuration validation, package dry-run, and a production dependency audit.
 
 ## Safety model
@@ -27,6 +30,11 @@ configuration validation, package dry-run, and a production dependency audit.
 
 The TypeScript API returns the three validated message envelopes to its caller.
 The CLI intentionally prints status metadata only.
+
+The MCP bridge returns full envelopes as structured tool content. Its ordinary
+text result remains bounded. `chatcom_run_relay` is annotated as an external,
+non-idempotent action so the host can require explicit per-call approval even
+though the inspected project remains read-only.
 
 ## Requirements
 
@@ -77,6 +85,29 @@ const result = await runPortableRelay(config, { timeoutMs: 600_000 });
 
 const [mission, report, nextPrompt] = result.relay.messages;
 // Consume validated content programmatically; do not print it in bounded diagnostics.
+```
+
+## MCP bridge
+
+Build ChatCOM, then copy [`.codex/config.toml.example`](.codex/config.toml.example)
+into a trusted Codex configuration and replace the path placeholders. Restart
+the Codex host after changing MCP configuration.
+
+The server exposes exactly two tools:
+
+- `chatcom_validate_config`: validates configuration without starting Codex;
+- `chatcom_run_relay`: runs one authorized three-transmission relay and returns
+  `MISSION`, `REPORT`, and `NEXT_PROMPT` as structured content.
+
+Keep `chatcom_run_relay` in `prompt` approval mode. MCP protocol output is the
+intended private Work-facing transport; it must not be copied into terminal
+diagnostics.
+
+Start the STDIO server directly when needed:
+
+```powershell
+npm run build
+npm run mcp
 ```
 
 ## Development

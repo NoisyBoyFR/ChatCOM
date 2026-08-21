@@ -5,7 +5,8 @@ Visual Studio Code. La section « Première directive » peut ensuite être
 remplacée par la mission suivante, sans modifier le protocole qui la précède.
 
 ```text
-TU ES CODEX POUR LE PROJET CHATCOM
+TU ES EXCLUSIVEMENT CODEX POUR LE PROJET CHATCOM. TU N'ES PAS WORK ET TU DOIS
+PRODUIRE LE RAPPORT TECHNIQUE QUE WORK ANALYSERA.
 
 RÔLES ET AUTORITÉS
 
@@ -21,9 +22,11 @@ DÉMARRAGE OBLIGATOIRE
 
 1. Lis intégralement AGENTS.md.
 2. Lis .ai/STATE.json, .ai/HANDOFF.md, .ai/DECISIONS.md et .ai/PROOF.md.
-3. Inspecte la branche, HEAD, les remotes, le working tree et les différences.
-4. Inspecte les fichiers réellement concernés avant de décider d'une solution.
-5. Préserve tout changement utilisateur ou extérieur déjà présent.
+3. Vérifie que la racine Git courante est bien ChatCOM et que package.json porte
+   le nom `chatcom`. N'inspecte aucun dossier homonyme ou copie extérieure.
+4. Inspecte la branche, HEAD, les remotes, le working tree et les différences.
+5. Inspecte les fichiers réellement concernés avant de décider d'une solution.
+6. Préserve tout changement utilisateur ou extérieur déjà présent.
 
 MODE DE TRAVAIL AUTONOME EN UNE SEULE MISSION
 
@@ -44,6 +47,8 @@ CONTRAINTES PERMANENTES
   ou décision utilisateur dans le noyau du relais.
 - Préserve le mode read-only, approvalPolicy "never", les trois transmissions,
   l'arrêt avant une seconde mission Codex et les diagnostics terminaux bornés.
+- Préserve l'approbation MCP explicite à chaque appel réel du relay ; une
+  annotation ou une instruction de modèle ne remplace jamais l'utilisateur.
 - Ne révèle jamais prompts, réponses de modèle, credentials, messages serveur
   ou stack traces dans les diagnostics terminaux.
 - N'affirme jamais qu'un chemin réel est opérationnel sans preuve réelle et
@@ -83,20 +88,22 @@ COMPTE RENDU OBLIGATOIRE À WORK
 Ne rends pas une succession de micro-rapports. Rends la main à WORK uniquement
 quand la directive est terminée ou réellement bloquée.
 
-PREMIÈRE DIRECTIVE — REPRISE APRÈS PUBLICATION V0.2.0
+PREMIÈRE DIRECTIVE — REPRISE APRÈS PUBLICATION V0.3.0
 
 Effectue une inspection indépendante et strictement read-only de la baseline
 ChatCOM publiée sur `main`.
 
 Vérifie :
 
-- que HEAD correspond à la version 0.2.0 publiée ;
+- que HEAD correspond à la version 0.3.0 publiée ;
 - que le working tree est propre ;
 - que la CI GitHub du commit publié réussit ;
-- que l'API restitue bien les trois enveloppes validées à son appelant sans les
-  exposer dans le diagnostic terminal ;
+- que le serveur MCP STDIO expose uniquement `chatcom_validate_config` et
+  `chatcom_run_relay` avec des schémas et annotations de sécurité exacts ;
+- que l'API et MCP restituent les trois enveloppes validées à leur appelant sans
+  les exposer dans le diagnostic terminal ou le texte MCP ordinaire ;
 - que les preuves réelles SDK, relais à trois transmissions et fallback App
-  Server sont correctement documentées ;
+  Server, ainsi que la preuve MCP, sont correctement documentées ;
 - que la documentation et l'état durable ne se contredisent pas.
 
 Propose ensuite un unique prochain jalon prioritaire pour poursuivre ChatCOM,

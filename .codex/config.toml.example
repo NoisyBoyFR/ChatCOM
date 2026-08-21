@@ -1,0 +1,15 @@
+# Copy the relevant table to a trusted project's .codex/config.toml or to
+# ~/.codex/config.toml, then replace the two placeholders with absolute paths.
+[mcp_servers.chatcom]
+command = "node"
+args = ["<ABSOLUTE_PATH_TO_CHATCOM>/dist/mcp-server.js"]
+cwd = "<ABSOLUTE_PATH_TO_CHATCOM>"
+required = true
+enabled = true
+enabled_tools = ["chatcom_validate_config", "chatcom_run_relay"]
+default_tools_approval_mode = "writes"
+startup_timeout_sec = 10
+tool_timeout_sec = 3600
+
+[mcp_servers.chatcom.tools.chatcom_run_relay]
+approval_mode = "prompt"

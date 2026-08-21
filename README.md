@@ -11,7 +11,7 @@
 
 [![Download ChatCOM Desktop](https://img.shields.io/badge/Download-ChatCOM_Desktop_for_Windows-0078D4?style=for-the-badge&logo=windows11&logoColor=white)](https://github.com/NoisyBoyFR/ChatCOM/releases/download/v1.0.0-rc.3/ChatCOM-Desktop-1.0.0-rc.3-Setup.exe)
 
-**Current local candidate:** `1.0.0-rc.4` · Windows x64 · unsigned pre-release; automatic public updates are disabled until signed artifacts are available
+**Current source candidate:** `1.0.0-rc.4` · Windows x64 · the protected Artifact Signing workflow is ready, but public updates remain disabled until the external identity and certificate profile are configured
 
 ## What is ChatCOM?
 
@@ -60,6 +60,11 @@ restart is offered only after confirmed cleanup.
 4. Start **ChatCOM Desktop**, select a trusted local Git project, then complete the guided configuration.
 
 The installer requires no administrator rights, does not change `PATH`, does not configure MCP, and does not start Codex or a relay automatically. It is currently **unsigned**; verify its checksum and continue only if you trust this repository and release.
+
+The manual, OIDC-based Windows signing workflow and its one-time Azure/GitHub
+owner setup are documented in [WINDOWS-SIGNING.md](WINDOWS-SIGNING.md). It
+creates only a temporary signed validation artifact and cannot publish a tag or
+Release.
 
 The complete machine-readable build information is available in [desktop-build-manifest.json](https://github.com/NoisyBoyFR/ChatCOM/releases/download/v1.0.0-rc.3/desktop-build-manifest.json).
 

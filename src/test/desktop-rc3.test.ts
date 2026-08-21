@@ -60,9 +60,23 @@ test("RC.3 renderer covers display settings and keyboard escape paths", async ()
 
 test("RC.3 artifact naming and manifest are constrained", async () => {
   const workflow = await readFile(".github/workflows/ci.yml", "utf8");
+  const signingWorkflow = await readFile(".github/workflows/sign-windows.yml", "utf8");
+  const signatureVerifier = await readFile("scripts/verify-windows-signature.ps1", "utf8");
   const verifier = await readFile("scripts/verify-desktop-package.mjs", "utf8");
-  assert.match(workflow, /chatcom-desktop-1\.0\.0-rc\.4-windows-x64/u);
+  assert.match(workflow, /chatcom-desktop-1\.0\.0-rc\.4-windows-x64-unsigned-validation/u);
   assert.match(workflow, /actions\/upload-artifact@[0-9a-f]{40}/u);
   for (const key of ["version", "platform", "architecture", "filename", "size", "sha256", "codexRuntimeVersion", "signature"]) assert.match(verifier, new RegExp(`${key}`, "u"));
   assert.match(verifier, /UNSIGNED/u);
+  assert.match(verifier, /--expect-signed/u);
+  assert.match(signingWorkflow, /workflow_dispatch/u);
+  assert.match(signingWorkflow, /environment: windows-code-signing/u);
+  assert.match(signingWorkflow, /id-token: write/u);
+  assert.match(signingWorkflow, /azure\/login@[0-9a-f]{40}/u);
+  assert.match(signingWorkflow, /azure\/artifact-signing-action@[0-9a-f]{40}/u);
+  assert.match(signingWorkflow, /chatcom-desktop-1\.0\.0-rc\.4-windows-x64-signed/u);
+  assert.match(signingWorkflow, /SIGN_RC4/u);
+  assert.match(signatureVerifier, /Get-AuthenticodeSignature/u);
+  assert.match(signatureVerifier, /TimeStamperCertificate/u);
+  assert.match(signatureVerifier, /signtool\.exe/u);
+  assert.doesNotMatch(signingWorkflow, /client-secret/u);
 });

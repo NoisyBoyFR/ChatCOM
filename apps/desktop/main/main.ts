@@ -11,6 +11,7 @@ import { migratePreferences, preferencesForStorage, DEFAULT_PREFERENCES, type De
 import { translate } from "../../../src/desktop/i18n.js";
 import { DESKTOP_IPC_CHANNELS, type DesktopConfigureInput } from "../shared/ipc.js";
 import { CHATCOM_UPDATE_REPOSITORY, UpdaterController, evaluateUpdatePolicy, inspectWindowsAuthenticode, verifyArtifactHash, type ElectronUpdaterAdapter, type UpdateSnapshot } from "../../../src/desktop/updater.js";
+import { APPROVED_PUBLISHER_SUBJECT } from "../../../src/desktop/publisher.js";
 
 const orchestrator = new ConversationOrchestrator();
 let mainWindow: BrowserWindow | undefined;
@@ -153,9 +154,9 @@ async function loadUpdateManifest(updateURL: string, expected: { currentVersion:
 async function configureUpdater(): Promise<void> {
   const version = app.getVersion();
   const proof = await inspectWindowsAuthenticode(process.execPath);
-  const policy = evaluateUpdatePolicy({ packaged: app.isPackaged, platform: process.platform, architecture: process.arch, currentVersion: version, channel: currentPreferences.updateChannel, signatureState: proof.signatureState, publisher: proof.publisher, timestamped: proof.timestamped, repository: CHATCOM_UPDATE_REPOSITORY, minimumUpdaterVersion: "1.0.0" });
+  const policy = evaluateUpdatePolicy({ packaged: app.isPackaged, platform: process.platform, architecture: process.arch, currentVersion: version, channel: currentPreferences.updateChannel, signatureState: proof.signatureState, publisher: proof.publisher, timestamped: proof.timestamped, repository: CHATCOM_UPDATE_REPOSITORY, minimumUpdaterVersion: "1.0.0", approvedPublisherSubject: APPROVED_PUBLISHER_SUBJECT });
   const adapter: ElectronUpdaterAdapter = { setFeedURL: (options) => autoUpdater.setFeedURL(options), checkForUpdates: () => autoUpdater.checkForUpdates(), quitAndInstall: () => autoUpdater.quitAndInstall(), on: (event, listener) => autoUpdater.on(event as never, listener as never), removeListener: (event, listener) => autoUpdater.removeListener(event as never, listener as never) };
-  updater = new UpdaterController({ adapter, currentVersion: version, channel: currentPreferences.updateChannel, policyEnabled: policy.enabled, publicUpdatesEnabled: currentPreferences.autoUpdateEnabled && policy.enabled, loadManifest: loadUpdateManifest, relayState: () => { const snapshot = orchestrator.snapshot(); const activity = ["RUNNING", "PAUSE_REQUESTED", "STOPPING"].includes(snapshot.state) ? snapshot.state as "RUNNING" | "PAUSE_REQUESTED" | "STOPPING" : "IDLE"; return { activity, cleanupConfirmed: snapshot.cleanup === "CONFIRMED" }; }, onChange: sendUpdate });
+  updater = new UpdaterController({ adapter, currentVersion: version, channel: currentPreferences.updateChannel, policyEnabled: policy.enabled, publicUpdatesEnabled: currentPreferences.autoUpdateEnabled && policy.enabled, approvedPublisherSubject: APPROVED_PUBLISHER_SUBJECT, loadManifest: loadUpdateManifest, relayState: () => { const snapshot = orchestrator.snapshot(); const activity = ["RUNNING", "PAUSE_REQUESTED", "STOPPING"].includes(snapshot.state) ? snapshot.state as "RUNNING" | "PAUSE_REQUESTED" | "STOPPING" : "IDLE"; return { activity, cleanupConfirmed: snapshot.cleanup === "CONFIRMED" }; }, onChange: sendUpdate });
   updateSnapshot = updater.snapshot();
   if (policy.enabled && currentPreferences.autoUpdateEnabled) updater.start();
 }

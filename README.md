@@ -89,9 +89,17 @@ It creates only a temporary signed validation artifact and cannot publish a
 tag or Release.
 
 The product name is `ChatCOM`; the Authenticode publisher is the exact subject
-assigned later by SignPath and is never guessed or hard-coded. The local
+assigned later by SignPath and is never guessed or hard-coded. During a future
+signed build, `SIGNPATH_PUBLISHER_SUBJECT` is supplied as public build input and
+embedded immutably in the Desktop main bundle. The updater compares that
+embedded value exactly with the installed binary subject and the manifest
+publisher; missing, malformed, or different values disable updates. The local
 Preview validator refuses activation unless the manifest is `SIGNED`,
-timestamped, hashed, and carries that configured subject.
+timestamped, hashed, and carries the same configured subject.
+
+Desktop packaging starts from a verified, targeted clean output directory. The
+packaged application contains exactly one `codex.exe`; the old duplicate
+`resources/@openai` copy is no longer added beside the asar-unpacked runtime.
 
 The complete machine-readable build information is available in [desktop-build-manifest.json](https://github.com/NoisyBoyFR/ChatCOM/releases/download/v1.0.0-rc.3/desktop-build-manifest.json).
 

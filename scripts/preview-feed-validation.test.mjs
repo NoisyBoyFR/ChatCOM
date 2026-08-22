@@ -19,7 +19,7 @@ test("preview feed validation requires signed timestamped artifacts and verifies
     await writeFile(join(root, "RELEASES"), releases);
     const manifest = {
       version: "1.0.0-rc.5", channel: "preview", platform: "windows", architecture: "x64",
-      publisher: "CN=SignPath Foundation", timestamped: true, signature: "SIGNED", signatureState: "SIGNED",
+      publisher: "CN=Approved Test Publisher", approvedPublisherSubject: "CN=Approved Test Publisher", timestamped: true, signature: "SIGNED", signatureState: "SIGNED",
       artifacts: [
         { filename: "ChatCOM-Desktop-1.0.0-rc.5-Setup.exe", size: setup.length, sha256: digest(setup), kind: "setup" },
         { filename: "ChatCOM-Desktop-1.0.0-rc.5-full.nupkg", size: nupkg.length, sha256: digest(nupkg), kind: "squirrel-full" },
@@ -44,6 +44,11 @@ test("preview feed validation requires signed timestamped artifacts and verifies
     const unknownPublisher = spawnSync(process.execPath, [script, "--root", root, "--manifest", unknownPublisherPath], { encoding: "utf8" });
     assert.notEqual(unknownPublisher.status, 0);
     assert.match(unknownPublisher.stdout, /CHATCOM_PREVIEW_FEED kind=FAILURE code=PREVIEW_FEED_INVALID/u);
+
+    const differentPublisherPath = join(root, "different-publisher.json");
+    await writeFile(differentPublisherPath, JSON.stringify({ ...manifest, publisher: "CN=Other Publisher" }));
+    const differentPublisher = spawnSync(process.execPath, [script, "--root", root, "--manifest", differentPublisherPath], { encoding: "utf8" });
+    assert.notEqual(differentPublisher.status, 0);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

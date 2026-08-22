@@ -100,7 +100,7 @@ CHATCOM_MCP_PROOF kind=SUCCESS code=OK tools=2 transmissions=3 cleanup=CONFIRMED
 - real proof attempts used: 1 of the authorized maximum of 2;
 - runtime code was not changed after the successful proof.
 
-## Desktop RC.4 updater candidate — local only
+## Desktop RC.5 updater candidate — local only
 
 The updater candidate has not been published and has not performed a real
 update download. Deterministic tests cover the main-process controller,
@@ -156,3 +156,28 @@ stopped before a second Codex mission and cleanup was confirmed.
 
 This records the already authorized proof; no additional relay was run by the
 release-readiness work.
+
+## RC.5 signature and packaging guard — 2026-08-22
+
+This guard changed no signing identity and made no signing request. The future
+public Authenticode subject remains an external build variable; an empty,
+malformed, or inconsistent value disables updates. A signed build will embed
+the approved value in the Desktop main bundle and compare it exactly with the
+installed binary subject and the manifest publisher.
+
+Two fresh isolated Windows builds had identical structure and sizes:
+
+- Setup: `279708160` bytes;
+- full Squirrel package: `279442587` bytes;
+- unpacked application: `782975400` bytes;
+- Electron `ChatCOM.exe`: `235534336` bytes;
+- `app.asar`: `17702645` bytes;
+- `app.asar.unpacked`: `391132092` bytes;
+- Codex runtime: exactly one `codex.exe`, `297362224` bytes;
+- forbidden recursively included output paths: `0`.
+
+The previous `410684928`-byte Setup and `410895942`-byte full package carried
+an additional `resources/@openai` tree beside the asar-unpacked runtime; the
+new package removes that duplication and safely cleans only a verified output
+directory. These are local unsigned validation artefacts, not a new WORK proof
+or a public update feed.

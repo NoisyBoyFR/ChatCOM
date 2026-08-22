@@ -120,7 +120,10 @@ export async function resolveBundledCodexRuntime(): Promise<string> {
   const [packageName, targetTriple, executableName] = target;
   const packageJsonCandidates: string[] = [];
   const resourcesPath = (process as NodeJS.Process & { resourcesPath?: string }).resourcesPath;
-  if (resourcesPath !== undefined && packageName.startsWith("@openai/")) packageJsonCandidates.push(join(resourcesPath, "@openai", packageName.slice("@openai/".length), "package.json"));
+  if (resourcesPath !== undefined && packageName.startsWith("@openai/")) {
+    const shortName = packageName.slice("@openai/".length);
+    packageJsonCandidates.push(join(resourcesPath, "app.asar.unpacked", "node_modules", "@openai", shortName, "package.json"));
+  }
   try { packageJsonCandidates.push(moduleRequire.resolve(`${packageName}/package.json`)); } catch { /* packaged fallback is checked above */ }
   for (const packageJsonPath of packageJsonCandidates) {
     try {

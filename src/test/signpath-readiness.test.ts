@@ -20,6 +20,7 @@ test("SignPath application documents use the owner identity and required policie
   assert.match(security, /GitHub Security\s+Advisories/u);
   assert.match(notices, /@openai\/codex-sdk/u);
   assert.match(dossier, /No value is invented/u);
+  assert.match(dossier, /embedded immutably/u);
   assert.match(dossier, /SIGNPATH_API_TOKEN/u);
 });
 
@@ -35,6 +36,9 @@ test("SignPath workflow is manual, main-only, pinned and publication-blocked", a
   assert.match(workflow, /github-artifact-id: \$\{\{ steps\.upload-signing-input\.outputs\.artifact-id \}\}/u);
   assert.match(workflow, /SIGNPATH_ARTIFACT_CONFIGURATION_SLUG/u);
   assert.match(workflow, /SIGNPATH_PUBLISHER_SUBJECT/u);
+  assert.match(workflow, /CHATCOM_APPROVED_PUBLISHER_SUBJECT/u);
+  assert.match(workflow, /SIGNING_PUBLISHER_SUBJECT_INVALID/u);
+  assert.match(workflow, /--approved-publisher-subject/u);
   assert.match(workflow, /SIGNPATH_RESULT kind=SIGNED/u);
   assert.doesNotMatch(workflow, /azure\//iu);
   assert.doesNotMatch(workflow, /AZURE_/u);
@@ -58,6 +62,10 @@ test("signing policy documents independent verification and no unsigned publicat
   assert.match(release, /RC\.5 signing gate/u);
   assert.match(verifier, /PUBLISHER_EXPECTED_MISSING/u);
   assert.match(verifier, /PUBLISHER_MISMATCH/u);
+  const packageVerifier = await readFile("scripts/verify-desktop-package.mjs", "utf8");
+  assert.match(packageVerifier, /runtime-count/u);
+  assert.match(packageVerifier, /output-recursion/u);
+  assert.match(packageVerifier, /approvedPublisherSubject/u);
   assert.doesNotMatch(verifier, new RegExp(["CN", "ChatCOM"].join("="), "u"));
   const obsoleteRelease = new RegExp(["RC", "4"].join("[.]?"), "u");
   const obsoleteConfirmation = new RegExp(["SIGN", "RC", "4"].join("_"), "u");

@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { access, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
-import { basename, dirname, resolve } from "node:path";
+import { basename, dirname, relative, resolve } from "node:path";
 
 const args = process.argv.slice(2);
 const valueFor = (name) => { const index = args.indexOf(name); return index >= 0 ? args[index + 1] : undefined; };
@@ -10,11 +10,11 @@ const appPath = valueFor("--app");
 const manifestPath = valueFor("--manifest");
 const sumsPath = valueFor("--sums");
 const expectSigned = args.includes("--expect-signed");
-const publisherSubject = valueFor("--publisher-subject");
+const publisherSubject = valueFor("--approved-publisher-subject") ?? valueFor("--publisher-subject");
 const expectedRuntimeVersion = "0.149.0";
-const optionsWithValues = new Set(["--setup", "--app", "--manifest", "--sums", "--publisher-subject"]);
+const optionsWithValues = new Set(["--setup", "--app", "--manifest", "--sums", "--publisher-subject", "--approved-publisher-subject"]);
 const flags = new Set(["--expect-signed"]);
-const publisherConfigured = typeof publisherSubject === "string" && publisherSubject.trim().length > 0 && !["UNKNOWN", "UNAVAILABLE"].includes(publisherSubject.trim());
+const publisherConfigured = typeof publisherSubject === "string" && publisherSubject.length > 0 && publisherSubject.length <= 512 && publisherSubject === publisherSubject.trim() && !/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F\r\n\t]/u.test(publisherSubject) && !["UNKNOWN", "UNAVAILABLE"].includes(publisherSubject);
 let argumentsValid = true;
 for (let index = 0; index < args.length; index += 1) {
   const argument = args[index];
@@ -44,11 +44,24 @@ if (!argumentsValid || !setupPath || !appPath || Boolean(manifestPath) !== Boole
     const releasesStats = await stat(releases);
     if (!setupStats.isFile() || setupStats.size < 1_000_000) throw new Error("setup");
     await access(resolve(app, "resources", "app.asar"));
-    const runtimePackage = resolve(app, "resources", "@openai", "codex-win32-x64");
+    const files = [];
+    const pending = [app];
+    while (pending.length > 0) {
+      const directory = pending.pop();
+      for (const entry of await readdir(directory, { withFileTypes: true })) {
+        const candidate = resolve(directory, entry.name);
+        const pathParts = relative(app, candidate).split(/[\\/]/u).filter(Boolean);
+        if (pathParts.some((part) => part === "out" || /^out-desktop(?:[-.].*)?$/iu.test(part))) throw new Error("output-recursion");
+        if (entry.isDirectory()) pending.push(candidate);
+        else if (entry.isFile()) files.push(candidate);
+      }
+    }
+    const runtimeCandidates = files.filter((file) => basename(file).toLowerCase() === "codex.exe");
+    if (runtimeCandidates.length !== 1) throw new Error("runtime-count");
+    const runtime = runtimeCandidates[0];
+    const runtimePackage = dirname(dirname(dirname(dirname(runtime))));
     const runtimePackageMetadata = JSON.parse(await readFile(resolve(runtimePackage, "package.json"), "utf8"));
     if (typeof runtimePackageMetadata.version !== "string" || !(runtimePackageMetadata.version === expectedRuntimeVersion || runtimePackageMetadata.version.startsWith(`${expectedRuntimeVersion}-`))) throw new Error("runtime-version");
-    const runtime = resolve(runtimePackage, "vendor", "x86_64-pc-windows-msvc", "bin", "codex.exe");
-    await access(runtime);
     const versionProbe = spawnSync(runtime, ["--version"], { shell: false, windowsHide: true, encoding: "utf8", timeout: 5_000, stdio: ["ignore", "pipe", "ignore"] });
     if (versionProbe.status !== 0 || !new RegExp(`\\b${expectedRuntimeVersion.replaceAll(".", "\\.")}(?:-[A-Za-z0-9.-]+)?\\b`, "u").test(`${versionProbe.stdout ?? ""}`)) throw new Error("runtime-executable");
     const runtimeStats = await stat(runtime);
@@ -70,7 +83,7 @@ if (!argumentsValid || !setupPath || !appPath || Boolean(manifestPath) !== Boole
     if (manifestPath || sumsPath) {
       if (!manifestPath || !sumsPath) throw new Error("artifact-output");
       const signatureState = expectSigned ? "SIGNED" : "UNSIGNED";
-      const manifest = { version: packageMetadata.version, channel: packageMetadata.version.includes("-") ? "preview" : "stable", platform: "windows", architecture: "x64", publisher: publisherSubject ?? "UNAVAILABLE", timestamped: expectSigned, minimumUpdaterVersion: "1.0.0", filename, size: setupStats.size, sha256: setupSha256, codexRuntimeVersion: expectedRuntimeVersion, signature: signatureState, signatureState, artifacts: [{ filename, size: setupStats.size, sha256: setupSha256, kind: "setup" }, { filename: nupkgName, size: nupkgStats.size, sha256: nupkgSha256, kind: "squirrel-full" }, { filename: releasesName, size: releasesStats.size, sha256: releasesSha256, kind: "squirrel-releases" }] };
+      const manifest = { version: packageMetadata.version, channel: packageMetadata.version.includes("-") ? "preview" : "stable", platform: "windows", architecture: "x64", publisher: publisherSubject ?? "UNAVAILABLE", approvedPublisherSubject: publisherSubject ?? "UNAVAILABLE", timestamped: expectSigned, minimumUpdaterVersion: "1.0.0", filename, size: setupStats.size, sha256: setupSha256, codexRuntimeVersion: expectedRuntimeVersion, signature: signatureState, signatureState, artifacts: [{ filename, size: setupStats.size, sha256: setupSha256, kind: "setup" }, { filename: nupkgName, size: nupkgStats.size, sha256: nupkgSha256, kind: "squirrel-full" }, { filename: releasesName, size: releasesStats.size, sha256: releasesSha256, kind: "squirrel-releases" }] };
       await writeFile(resolve(manifestPath), `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
       await writeFile(resolve(sumsPath), `${setupSha256}  ${filename}\n${nupkgSha256}  ${nupkgName}\n${releasesSha256}  ${releasesName}\n`, "utf8");
     }

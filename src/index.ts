@@ -39,5 +39,6 @@ export { DEFAULT_PREFERENCES, PREFERENCES_SCHEMA_VERSION, defaultUpdateChannel, 
 export type { DesktopPreferences, TextSize, Theme, WindowMode } from "./desktop/preferences.js";
 export { SettingsSession } from "./desktop/settings-session.js";
 export type { EditablePreferences } from "./desktop/settings-session.js";
+export { APPROVED_PUBLISHER_SUBJECT, normalizeApprovedPublisherSubject } from "./desktop/publisher.js";
 export { CHATCOM_PREVIEW_UPDATE_BASE_URL, CHATCOM_UPDATE_REPOSITORY, CHATCOM_UPDATE_SERVER, UPDATE_INTERVAL_MS, UPDATE_START_DELAY_MS, UpdaterController, buildUpdateFeedUrl, compareVersions, evaluateUpdatePolicy, inspectWindowsAuthenticode, isOfficialUpdateFeedUrl, validateUpdateManifest, verifyArtifactHash } from "./desktop/updater.js";
 export type { AuthenticodeProof, ElectronUpdaterAdapter, RelayActivity, UpdateArtifact, UpdateChannel as UpdaterChannel, UpdateManifest, UpdatePolicyInput, UpdatePolicyResult, UpdateSnapshot, UpdateStatus, UpdaterControllerOptions } from "./desktop/updater.js";

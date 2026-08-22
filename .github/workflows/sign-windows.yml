@@ -49,6 +49,10 @@ jobs:
               throw "SIGNING_CONFIGURATION_INCOMPLETE"
             }
           }
+          $subject = [Environment]::GetEnvironmentVariable("SIGNPATH_PUBLISHER_SUBJECT")
+          if ($subject.Length -gt 512 -or $subject -cne $subject.Trim() -or $subject -match '[\x00-\x1F\x7F]' -or $subject -in @("UNKNOWN", "UNAVAILABLE")) {
+            throw "SIGNING_PUBLISHER_SUBJECT_INVALID"
+          }
           "CHATCOM_SIGNING_PREFLIGHT kind=READY provider=SIGNPATH configuration=COMPLETE"
 
       - name: Check out repository
@@ -82,6 +86,8 @@ jobs:
         run: npm run verify
 
       - name: Build unsigned desktop package for SignPath
+        env:
+          CHATCOM_APPROVED_PUBLISHER_SUBJECT: ${{ vars.SIGNPATH_PUBLISHER_SUBJECT }}
         run: npm run desktop:make
 
       - name: Upload protected signing input
@@ -131,7 +137,7 @@ jobs:
             --manifest "out-desktop-signed/desktop-build-manifest.json" `
             --sums "out-desktop-signed/SHA256SUMS.txt" `
             --expect-signed `
-            --publisher-subject $env:SIGNPATH_PUBLISHER_SUBJECT
+            --approved-publisher-subject $env:SIGNPATH_PUBLISHER_SUBJECT
           $manifest = Get-Content -Raw "out-desktop-signed\desktop-build-manifest.json" | ConvertFrom-Json
           if ($manifest.signatureState -cne "SIGNED" -or $manifest.signature -cne "SIGNED") { throw "SIGNED_MANIFEST_INVALID" }
           "CHATCOM_SIGNPATH_RESULT kind=SIGNED manifest=SIGNED hashes=EMITTED"

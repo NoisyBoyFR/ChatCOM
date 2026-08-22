@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { execFile } from "node:child_process";
 import { readFile } from "node:fs/promises";
+import { normalizeApprovedPublisherSubject } from "./publisher.js";
 
 export const CHATCOM_UPDATE_SERVER = "https://update.electronjs.org";
 export const CHATCOM_UPDATE_REPOSITORY = "NoisyBoyFR/ChatCOM";
@@ -36,6 +37,7 @@ export interface UpdatePolicyInput {
   timestamped: boolean;
   repository: string;
   minimumUpdaterVersion: string;
+  approvedPublisherSubject?: string;
 }
 
 export interface UpdatePolicyResult {
@@ -64,6 +66,7 @@ export interface UpdateManifest {
   publisher: string;
   timestamped: boolean;
   minimumUpdaterVersion: string;
+  approvedPublisherSubject: string;
   signatureState: "SIGNED" | "UNSIGNED" | "INVALID";
   artifacts: UpdateArtifact[];
 }
@@ -85,6 +88,7 @@ export interface UpdaterControllerOptions {
   feedUrl?: string;
   allowLocalhostFeed?: boolean;
   loadManifest?: (updateURL: string, expected: { currentVersion: string; channel: UpdateChannel; releaseVersion: string }) => Promise<unknown>;
+  approvedPublisherSubject?: string;
   startDelayMs?: number;
   intervalMs?: number;
   setTimeout?: (handler: () => void, timeout: number) => ReturnType<typeof globalThis.setTimeout>;
@@ -133,13 +137,8 @@ function extractVersion(value: unknown): string | undefined {
   return match && versionParts(match[0]) ? match[0] : undefined;
 }
 
-const MAX_PUBLISHER_SUBJECT_LENGTH = 512;
-
 function normalizePublisherSubject(value: unknown): string {
-  if (typeof value !== "string") return "UNKNOWN";
-  const normalized = value.replace(/[\r\n\t]+/gu, " ").trim();
-  if (normalized.length === 0 || normalized.length > MAX_PUBLISHER_SUBJECT_LENGTH || normalized === "UNKNOWN" || normalized === "UNAVAILABLE") return "UNKNOWN";
-  return normalized;
+  return normalizeApprovedPublisherSubject(value) ?? "UNKNOWN";
 }
 
 function hasConfiguredPublisherSubject(value: unknown): value is string {
@@ -156,7 +155,10 @@ export function evaluateUpdatePolicy(input: UpdatePolicyInput): UpdatePolicyResu
   if (input.platform !== "win32" || input.architecture !== "x64") return { enabled: false, reason: "PLATFORM_UNSUPPORTED" };
   if (input.signatureState !== "SIGNED") return { enabled: false, reason: "SIGNATURE_REQUIRED" };
   if (!input.timestamped) return { enabled: false, reason: "SIGNATURE_TIMESTAMP_REQUIRED" };
+  const approved = normalizeApprovedPublisherSubject(input.approvedPublisherSubject);
+  if (!approved) return { enabled: false, reason: "PUBLISHER_APPROVED_MISSING" };
   if (!hasConfiguredPublisherSubject(input.publisher)) return { enabled: false, reason: "PUBLISHER_INVALID" };
+  if (input.publisher !== approved) return { enabled: false, reason: "PUBLISHER_MISMATCH" };
   if (input.repository !== CHATCOM_UPDATE_REPOSITORY) return { enabled: false, reason: "UPDATE_SOURCE_INVALID" };
   if (!versionParts(input.currentVersion) || !versionParts(input.minimumUpdaterVersion)) return { enabled: false, reason: "VERSION_INVALID" };
   return { enabled: true, reason: "READY" };
@@ -173,13 +175,15 @@ export function isOfficialUpdateFeedUrl(value: string, currentVersion: string, c
   } catch { return false; }
 }
 
-export function validateUpdateManifest(raw: unknown, expected: { currentVersion: string; channel: UpdateChannel }): UpdatePolicyResult {
+export function validateUpdateManifest(raw: unknown, expected: { currentVersion: string; channel: UpdateChannel; approvedPublisherSubject?: string }): UpdatePolicyResult {
   if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return { enabled: false, reason: "MANIFEST_INVALID" };
   const manifest = raw as Partial<UpdateManifest>;
   if (manifest.platform !== "windows" || manifest.architecture !== "x64") return { enabled: false, reason: "PLATFORM_MISMATCH" };
   if (manifest.channel !== expected.channel) return { enabled: false, reason: "CHANNEL_MISMATCH" };
   if (typeof manifest.version !== "string" || compareVersions(manifest.version, expected.currentVersion) <= 0) return { enabled: false, reason: "VERSION_NOT_NEWER" };
-  if (manifest.signatureState !== "SIGNED" || !hasConfiguredPublisherSubject(manifest.publisher) || manifest.timestamped !== true) return { enabled: false, reason: "SIGNATURE_INVALID" };
+  const approved = normalizeApprovedPublisherSubject(expected.approvedPublisherSubject);
+  if (!approved || manifest.signatureState !== "SIGNED" || !hasConfiguredPublisherSubject(manifest.publisher) || !hasConfiguredPublisherSubject(manifest.approvedPublisherSubject) || manifest.timestamped !== true) return { enabled: false, reason: "SIGNATURE_INVALID" };
+  if (manifest.publisher !== approved || manifest.approvedPublisherSubject !== approved) return { enabled: false, reason: "PUBLISHER_MISMATCH" };
   if (typeof manifest.minimumUpdaterVersion !== "string" || compareVersions(manifest.minimumUpdaterVersion, "1.0.0") > 0) return { enabled: false, reason: "UPDATER_TOO_OLD" };
   if (!Array.isArray(manifest.artifacts) || manifest.artifacts.length !== 3) return { enabled: false, reason: "ARTIFACT_SET_INVALID" };
   const kinds = new Set<string>();
@@ -224,6 +228,7 @@ export class UpdaterController {
   private readonly feedUrl?: string;
   private readonly allowLocalhostFeed: boolean;
   private readonly loadManifest?: UpdaterControllerOptions["loadManifest"];
+  private readonly approvedPublisherSubject: string;
   private readonly listeners = new Map<string, (...args: unknown[]) => void>();
   private startTimer: ReturnType<typeof globalThis.setTimeout> | undefined;
   private intervalTimer: ReturnType<typeof globalThis.setInterval> | undefined;
@@ -246,6 +251,7 @@ export class UpdaterController {
     this.feedUrl = options.feedUrl;
     this.allowLocalhostFeed = options.allowLocalhostFeed ?? false;
     this.loadManifest = options.loadManifest;
+    this.approvedPublisherSubject = options.approvedPublisherSubject ?? "";
     this.snapshotState = { status: options.publicUpdatesEnabled ? "IDLE" : "DISABLED", currentVersion: options.currentVersion, channel: options.channel, readyToInstall: false, publicUpdatesEnabled: options.publicUpdatesEnabled };
   }
 
@@ -324,7 +330,7 @@ export class UpdaterController {
       const load = this.loadManifest;
       if (!load) return this.publish({ status: "ERROR", readyToInstall: false, errorCode: "MANIFEST_REQUIRED" });
       void load(updateURL, { currentVersion: this.snapshotState.currentVersion, channel: this.snapshotState.channel, releaseVersion: availableVersion }).then((manifest) => {
-        const validation = validateUpdateManifest(manifest, { currentVersion: this.snapshotState.currentVersion, channel: this.snapshotState.channel });
+        const validation = validateUpdateManifest(manifest, { currentVersion: this.snapshotState.currentVersion, channel: this.snapshotState.channel, approvedPublisherSubject: this.approvedPublisherSubject });
         if (!validation.enabled || (manifest as { version?: unknown }).version !== availableVersion) { this.publish({ status: "ERROR", readyToInstall: false, errorCode: validation.reason }); return; }
         this.publish({ status: "READY", readyToInstall: false, availableVersion, releaseNotes, releaseDate, errorCode: undefined });
         this.recomputeReady();

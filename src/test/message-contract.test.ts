@@ -38,7 +38,7 @@ test("uses a singleton enum for the structured output version", () => {
   assert.equal("const" in versionSchema, false);
 });
 
-test("creates exact route schemas with independent session and correlation constants", () => {
+test("creates exact SDK-compatible singleton-enum route schemas with independent session and correlation constants", () => {
   const schema = createMessageOutputSchema({
     sessionId: UUIDS[0],
     sequence: 2,
@@ -50,17 +50,18 @@ test("creates exact route schemas with independent session and correlation const
     point: "POINT-2",
   });
   const properties = schema.properties;
-  assert.equal(properties.version.const, "1.0");
-  assert.equal(properties.session_id.const, UUIDS[0]);
-  assert.equal(properties.sequence.const, 2);
-  assert.equal(properties.sender.const, "CODEX_LOCAL");
-  assert.equal(properties.recipient.const, "WORK_LOCAL");
-  assert.equal(properties.type.const, "REPORT");
-  assert.equal(properties.correlation_id.const, UUIDS[1]);
-  assert.equal(properties.phase.const, "PHASE-B");
-  assert.equal(properties.point.const, "POINT-2");
-  assert.equal(properties.delivery_status.const, "CREATED");
-  assert.equal(properties.user_action_needed.const, false);
+  assert.deepEqual(properties.version.enum, ["1.0"]);
+  assert.deepEqual(properties.session_id.enum, [UUIDS[0]]);
+  assert.deepEqual(properties.sequence.enum, [2]);
+  assert.deepEqual(properties.sender.enum, ["CODEX_LOCAL"]);
+  assert.deepEqual(properties.recipient.enum, ["WORK_LOCAL"]);
+  assert.deepEqual(properties.type.enum, ["REPORT"]);
+  assert.deepEqual(properties.correlation_id.enum, [UUIDS[1]]);
+  assert.deepEqual(properties.phase.enum, ["PHASE-B"]);
+  assert.deepEqual(properties.point.enum, ["POINT-2"]);
+  assert.deepEqual(properties.delivery_status.enum, ["CREATED"]);
+  assert.deepEqual(properties.user_action_needed.enum, [false]);
+  assert.equal(JSON.stringify(schema).includes("\"const\""), false);
   assert.equal(properties.message_id.pattern, MESSAGE_OUTPUT_SCHEMA.properties.message_id.pattern);
   assert.equal(schema.additionalProperties, false);
 });

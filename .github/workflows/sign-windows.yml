@@ -1,10 +1,10 @@
-name: Sign Windows RC
+name: Sign Windows RC.5
 
 on:
   workflow_dispatch:
     inputs:
       confirmation:
-        description: Type SIGN_RC4 to authorize one protected signing request
+        description: Type SIGN_RC5 to authorize one protected signing request
         required: true
         type: string
 
@@ -18,7 +18,7 @@ concurrency:
 
 jobs:
   sign-windows:
-    name: Sign and verify Windows RC.4 with SignPath
+    name: Sign and verify Windows RC.5 with SignPath
     runs-on: windows-2025
     environment: windows-code-signing
     steps:
@@ -34,7 +34,7 @@ jobs:
           SIGNPATH_ARTIFACT_CONFIGURATION_SLUG: ${{ vars.SIGNPATH_ARTIFACT_CONFIGURATION_SLUG }}
           SIGNPATH_PUBLISHER_SUBJECT: ${{ vars.SIGNPATH_PUBLISHER_SUBJECT }}
         run: |
-          if ($env:CHATCOM_CONFIRMATION -cne "SIGN_RC4") { throw "SIGNING_CONFIRMATION_INVALID" }
+          if ($env:CHATCOM_CONFIRMATION -cne "SIGN_RC5") { throw "SIGNING_CONFIRMATION_INVALID" }
           if ($env:CHATCOM_REF -cne "refs/heads/main") { throw "SIGNING_REF_INVALID" }
           $required = @(
             "SIGNPATH_API_TOKEN",
@@ -61,6 +61,14 @@ jobs:
           if ($origin -cne "https://github.com/NoisyBoyFR/ChatCOM.git") { throw "SIGNING_ORIGIN_INVALID" }
           if ((git rev-parse --abbrev-ref HEAD) -cne "main") { throw "SIGNING_BRANCH_INVALID" }
 
+      - name: Derive versioned artifact names
+        id: metadata
+        shell: pwsh
+        run: |
+          $package = Get-Content -Raw package.json | ConvertFrom-Json
+          if ($package.name -cne "chatcom" -or $package.version -notmatch '^1\.0\.0-rc\.5$') { throw "SIGNING_VERSION_INVALID" }
+          "version=$($package.version)" >> $env:GITHUB_OUTPUT
+
       - name: Set up Node.js
         uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444
         with:
@@ -80,7 +88,7 @@ jobs:
         id: upload-signing-input
         uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808
         with:
-          name: chatcom-desktop-1.0.0-rc.4-windows-x64-signpath-input
+          name: chatcom-desktop-${{ steps.metadata.outputs.version }}-windows-x64-signpath-input
           path: out-desktop
           if-no-files-found: error
           retention-days: 7
@@ -102,9 +110,10 @@ jobs:
       - name: Verify signed PE files independently
         shell: pwsh
         env:
+          CHATCOM_VERSION: ${{ steps.metadata.outputs.version }}
           SIGNPATH_PUBLISHER_SUBJECT: ${{ vars.SIGNPATH_PUBLISHER_SUBJECT }}
         run: |
-          $setup = Join-Path $PWD "out-desktop-signed\make\squirrel.windows\x64\ChatCOM-Desktop-1.0.0-rc.4-Setup.exe"
+          $setup = Join-Path $PWD "out-desktop-signed\make\squirrel.windows\x64\ChatCOM-Desktop-$env:CHATCOM_VERSION-Setup.exe"
           $app = Join-Path $PWD "out-desktop-signed\ChatCOM-win32-x64\ChatCOM.exe"
           if (!(Test-Path -LiteralPath $setup) -or !(Test-Path -LiteralPath $app)) { throw "SIGNED_PACKAGE_LAYOUT_INVALID" }
           .\scripts\verify-windows-signature.ps1 -Path $app -ExpectedSubject $env:SIGNPATH_PUBLISHER_SUBJECT -RequireTimestamp
@@ -113,10 +122,11 @@ jobs:
       - name: Verify signed package and emit final hashes
         shell: pwsh
         env:
+          CHATCOM_VERSION: ${{ steps.metadata.outputs.version }}
           SIGNPATH_PUBLISHER_SUBJECT: ${{ vars.SIGNPATH_PUBLISHER_SUBJECT }}
         run: |
           node scripts/verify-desktop-package.mjs `
-            --setup "out-desktop-signed/make/squirrel.windows/x64/ChatCOM-Desktop-1.0.0-rc.4-Setup.exe" `
+            --setup "out-desktop-signed/make/squirrel.windows/x64/ChatCOM-Desktop-$env:CHATCOM_VERSION-Setup.exe" `
             --app "out-desktop-signed/ChatCOM-win32-x64" `
             --manifest "out-desktop-signed/desktop-build-manifest.json" `
             --sums "out-desktop-signed/SHA256SUMS.txt" `
@@ -129,9 +139,9 @@ jobs:
       - name: Upload signed validation artifact
         uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808
         with:
-          name: chatcom-desktop-1.0.0-rc.4-windows-x64-signpath-signed-validation
+          name: chatcom-desktop-${{ steps.metadata.outputs.version }}-windows-x64-signpath-signed-validation
           path: |
-            out-desktop-signed/make/squirrel.windows/x64/ChatCOM-Desktop-1.0.0-rc.4-Setup.exe
+            out-desktop-signed/make/squirrel.windows/x64/*-Setup.exe
             out-desktop-signed/make/squirrel.windows/x64/*-full.nupkg
             out-desktop-signed/make/squirrel.windows/x64/RELEASES
             out-desktop-signed/SHA256SUMS.txt

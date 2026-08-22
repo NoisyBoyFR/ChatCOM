@@ -24,7 +24,7 @@ reviewer. Add these values in GitHub environment settings only:
 | `SIGNPATH_PROJECT_SLUG` | variable | SignPath project |
 | `SIGNPATH_SIGNING_POLICY_SLUG` | variable | approved signing policy |
 | `SIGNPATH_ARTIFACT_CONFIGURATION_SLUG` | variable | nested artifact rules |
-| `SIGNPATH_PUBLISHER_SUBJECT` | variable | expected Authenticode subject |
+| `SIGNPATH_PUBLISHER_SUBJECT` | variable | exact Authenticode subject assigned by SignPath |
 
 Never commit or paste a token, private key, certificate password, or other
 credential. The exact identifiers and subject are external owner configuration
@@ -33,12 +33,12 @@ and are deliberately not invented in this repository.
 ## Protected workflow
 
 `.github/workflows/sign-windows.yml` has `workflow_dispatch` only. It accepts
-`SIGN_RC4`, requires `main`, uses the `windows-code-signing` environment, and
+`SIGN_RC5`, requires `main`, uses the `windows-code-signing` environment, and
 has only `actions: read` and `contents: read` permissions. It checks the
 repository origin, runs `npm run verify`, builds the Squirrel package, uploads
 the input as a temporary GitHub artifact, submits one SignPath request with the
 pinned official action, downloads the result, and independently checks
-`ChatCOM.exe` and the final Setup with Authenticode, publisher, and RFC 3161
+`ChatCOM.exe` and the final Setup with Authenticode, the configured publisher subject, and RFC 3161
 timestamp validation. It then emits `desktop-build-manifest.json` and
 `SHA256SUMS.txt` with `signatureState: SIGNED`.
 
@@ -48,8 +48,8 @@ must not be published.
 
 ## Manual run
 
-After owner approval and environment configuration, select **Sign Windows RC**
-from GitHub Actions, choose `main`, enter `SIGN_RC4`, and approve the protected
+After owner approval and environment configuration, select **Sign Windows RC.5**
+from GitHub Actions, choose `main`, enter `SIGN_RC5`, and approve the protected
 environment if prompted. The expected bounded markers are:
 
 ```text

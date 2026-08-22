@@ -82,8 +82,12 @@ test("RC.3 artifact naming and manifest are constrained", async () => {
   assert.match(signingWorkflow, /actions: read/u);
   assert.match(signingWorkflow, /contents: read/u);
   assert.match(signingWorkflow, /signpath\/github-action-submit-signing-request@[0-9a-f]{40}/u);
-  assert.match(signingWorkflow, /chatcom-desktop-1\.0\.0-rc\.4-windows-x64-signpath-signed-validation/u);
-  assert.match(signingWorkflow, /SIGN_RC4/u);
+  assert.match(signingWorkflow, /chatcom-desktop-\$\{\{ steps\.metadata\.outputs\.version \}\}-windows-x64-signpath-signed-validation/u);
+  assert.match(signingWorkflow, /SIGN_RC5/u);
+  const obsoleteRelease = new RegExp(["RC", "4"].join("[.]?"), "u");
+  const obsoleteConfirmation = new RegExp(["SIGN", "RC", "4"].join("_"), "u");
+  assert.doesNotMatch(signingWorkflow, obsoleteRelease);
+  assert.doesNotMatch(signingWorkflow, obsoleteConfirmation);
   assert.match(signatureVerifier, /Get-AuthenticodeSignature/u);
   assert.match(signatureVerifier, /TimeStamperCertificate/u);
   assert.match(signatureVerifier, /signtool\.exe/u);

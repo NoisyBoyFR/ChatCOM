@@ -198,7 +198,7 @@ Le rapport final à WORK doit toujours fournir :
 - l’état du dépôt local et distant ;
 - la confirmation des opérations volontairement non exécutées.
 
-Pour RC.4, GitHub peut recevoir le code validé par PR et fusion. En revanche,
+Pour RC.5, GitHub peut recevoir le code validé par PR et fusion. En revanche,
 la Release et l’auto-update public doivent attendre la signature Authenticode
 et la correction complète des défauts locaux.
 

@@ -9,7 +9,7 @@ claim that SignPath has approved the project or that a certificate exists.
 - Repository: `https://github.com/NoisyBoyFR/ChatCOM`
 - License: MIT
 - Copyright: `Copyright (c) 2026 Alexandre Balladelli`
-- Candidate: `1.0.0-rc.4`
+- Candidate: `1.0.0-rc.5`
 - Build workflow: `.github/workflows/ci.yml`
 - Protected signing workflow: `.github/workflows/sign-windows.yml`
 - Environment: `windows-code-signing`, deployment branch `main`
@@ -27,7 +27,7 @@ secret.
 
 ## Trusted build and artifact flow
 
-1. A maintainer starts the workflow manually on `main` and enters `SIGN_RC4`.
+1. A maintainer starts the workflow manually on `main` and enters `SIGN_RC5`.
 2. GitHub-hosted Windows builds from the public origin and runs `npm run verify`.
 3. The Squirrel package is uploaded as a temporary workflow artifact.
 4. The SignPath GitHub trusted build system verifies repository origin, branch,
@@ -75,4 +75,4 @@ Official starting points:
 
 Until owner submission, project approval, environment configuration, and a
 successful protected signing validation are complete, ChatCOM must not create
-an RC.4 tag, GitHub Release, public update feed, or npm publication.
+an RC.5 tag, GitHub Release, public update feed, or npm publication.

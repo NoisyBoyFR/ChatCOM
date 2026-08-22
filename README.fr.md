@@ -50,7 +50,7 @@ La route `WORK_HOST` est la seule éligible à une preuve WORK ↔ Codex réelle
 ## Télécharger et installer sur Windows
 
 Les liens publics ci-dessous pointent encore vers la dernière RC.3 publiée.
-La RC.4 reste un travail local de validation : elle ne doit pas être publiée
+La RC.5 reste un travail local de validation : elle ne doit pas être publiée
 et les mises à jour automatiques restent fermées tant que les artefacts
 Windows ne sont pas signés. Le canal Stable utilise `autoUpdater` dans le
 processus principal Electron avec la source officielle
@@ -74,6 +74,11 @@ effectuer par le propriétaire dans GitHub sont décrits dans
 [WINDOWS-SIGNING.md](WINDOWS-SIGNING.md). Ce workflow produit uniquement un
 artefact temporaire signé et ne peut créer ni tag ni Release.
 
+Le nom du produit est `ChatCOM` ; l’éditeur Authenticode est le sujet exact
+attribué ultérieurement par SignPath et n’est jamais deviné ni codé en dur. Le
+validateur local du canal Préversion refuse toute activation tant que le
+manifeste n’est pas `SIGNED`, horodaté, haché et associé à ce sujet configuré.
+
 Les informations de build lisibles par machine se trouvent dans [desktop-build-manifest.json](https://github.com/NoisyBoyFR/ChatCOM/releases/download/v1.0.0-rc.3/desktop-build-manifest.json).
 
 ## Prérequis
@@ -94,7 +99,7 @@ Les informations de build lisibles par machine se trouvent dans [desktop-build-m
 - les canaux IPC et leurs émetteurs sont autorisés et validés explicitement ;
 - les diagnostics exposent uniquement des métadonnées bornées.
 
-Le relais MCP authentifié a déjà réussi une preuve réelle de trois transmissions avec nettoyage confirmé. L’architecture de mise à jour RC.4, l’interface Desktop RC.3, ses traductions, ses paramètres, son installateur et les garde-fous SignPath sont couverts par 126 tests déterministes et une CI multiplateforme ; aucune nouvelle preuve réelle du relais depuis la GUI n’est encore revendiquée. Consultez [`.ai/PROOF.md`](.ai/PROOF.md).
+Le relais MCP authentifié a réussi une preuve réelle de trois transmissions avec nettoyage confirmé. L’architecture de mise à jour RC.5, l’interface Desktop, ses traductions, ses paramètres, son installateur, le pont WORK_HOST et les garde-fous SignPath sont couverts par la suite de tests déterministes et la CI multiplateforme. La preuve réelle WORK_HOST est enregistrée dans [`.ai/PROOF.md`](.ai/PROOF.md).
 
 ## Démarrage rapide pour les développeurs
 
@@ -113,7 +118,7 @@ npm run desktop:make
 Installateur attendu :
 
 ```text
-out-desktop/make/squirrel.windows/x64/ChatCOM-Desktop-1.0.0-rc.4-Setup.exe
+out-desktop/make/squirrel.windows/x64/ChatCOM-Desktop-1.0.0-rc.5-Setup.exe
 ```
 
 `npm run verify` exécute le build, les vérifications TypeScript du noyau et de Desktop, les tests déterministes, la validation de configuration, l’audit des dépendances de production et le contrôle du paquet npm. Les commandes de diagnostic peuvent contacter un runtime Codex réel et nécessitent une autorisation explicite.
@@ -178,9 +183,9 @@ Compilez ChatCOM, copiez [`.codex/config.toml.example`](.codex/config.toml.examp
 - [Dossier de candidature SignPath](SIGNPATH-APPLICATION.md)
 - [Préversion RC.3](https://github.com/NoisyBoyFR/ChatCOM/releases/tag/v1.0.0-rc.3)
 
-## Gate de publication RC.4
+## Gate de publication RC.5
 
-La RC.4 est une candidate source, pas une release publique. La publication
+La RC.5 est une candidate source, pas une release publique. La publication
 Windows reste bloquee tant que le proprietaire n'a pas termine la candidature
 SignPath Foundation Open Source Code Signing et que le workflow protege n'a
 pas produit un manifeste `SIGNED`. Le workflow est manuel, limite a `main`, ne

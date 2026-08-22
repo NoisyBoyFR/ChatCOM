@@ -56,3 +56,13 @@ not used a real MCP or model relay. Deterministic tests, build and typechecks
 are passing. The next authorized work is isolated Windows packaging, complete
 verification, PR/CI and merge. No tag, Release, public update feed, SignPath
 request or npm publication is authorized by this candidate work.
+
+## RC.7 two-conversation dialogue — 2026-08-22
+
+RC.7 adds bounded Desktop selection and dialogue between two existing official
+Codex App Server conversations. The pair is persisted locally, restored without
+automatic execution, and resumed with read-only sandbox and `approvalPolicy:
+never`. Full thread IDs stay out of renderer results and diagnostics. The
+implementation is on `feature/rc7-two-conversation-dialogue`; deterministic
+validation is complete, while any RC.7 real proof and formal publication
+remain separately authorized.

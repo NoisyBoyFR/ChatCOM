@@ -3,6 +3,9 @@ import type { PreflightResult } from "../../../src/desktop/preflight.js";
 import type { DesktopPreferences, TextSize, Theme, UpdateChannel, WindowMode } from "../../../src/desktop/preferences.js";
 import type { UpdateSnapshot } from "../../../src/desktop/updater.js";
 import type { BindingSummary } from "../../../src/desktop/bindings.js";
+import type { ConversationCard } from "../../../src/desktop/conversation-catalog.js";
+import type { ConversationPairSummary } from "../../../src/desktop/conversation-pair.js";
+import type { DialogueSpeaker, DualDialogueEvent, DualDialogueSnapshot } from "../../../src/desktop/dual-dialogue.js";
 
 export const DESKTOP_IPC_CHANNELS = {
   getState: "desktop:get-state",
@@ -27,6 +30,15 @@ export const DESKTOP_IPC_CHANNELS = {
   validateBinding: "desktop:validate-binding",
   disableBinding: "desktop:disable-binding",
   removeBinding: "desktop:remove-binding",
+  discoverConversations: "desktop:discover-conversations",
+  saveConversationPair: "desktop:save-conversation-pair",
+  getConversationPair: "desktop:get-conversation-pair",
+  clearConversationPair: "desktop:clear-conversation-pair",
+  startDualDialogue: "desktop:start-dual-dialogue",
+  pauseDualDialogue: "desktop:pause-dual-dialogue",
+  resumeDualDialogue: "desktop:resume-dual-dialogue",
+  stopDualDialogue: "desktop:stop-dual-dialogue",
+  dualEvent: "desktop:dual-event",
   event: "desktop:event",
 } as const;
 
@@ -49,6 +61,8 @@ export interface DesktopConfigureInput {
 }
 
 export interface DesktopBindingCreateInput { alias: string; projectRoot: string; threadId: string; }
+export interface ConversationDiscoveryInput { projectRoot?: string; searchTerm?: string; }
+export interface ConversationPairInput { workHandle: string; codexHandle: string; projectRoot: string; phase: string; point: string; objective: string; firstSpeaker: DialogueSpeaker; maxCycles: number; cycleTimeoutMs: number; }
 
 export interface DesktopApi {
   getState(): Promise<DesktopStateResponse>;
@@ -74,4 +88,13 @@ export interface DesktopApi {
   validateBinding(bindingId: string, projectRoot?: string): Promise<BindingSummary>;
   disableBinding(bindingId: string): Promise<void>;
   removeBinding(bindingId: string): Promise<void>;
+  discoverConversations(input?: ConversationDiscoveryInput): Promise<ConversationCard[]>;
+  saveConversationPair(input: ConversationPairInput): Promise<{ pair: ConversationPairSummary; snapshot: DualDialogueSnapshot }>;
+  getConversationPair(): Promise<ConversationPairSummary | undefined>;
+  clearConversationPair(): Promise<void>;
+  startDualDialogue(): Promise<DualDialogueSnapshot>;
+  pauseDualDialogue(): Promise<DualDialogueSnapshot>;
+  resumeDualDialogue(): Promise<DualDialogueSnapshot>;
+  stopDualDialogue(): Promise<DualDialogueSnapshot>;
+  onDualEvent(listener: (event: DualDialogueEvent) => void): () => void;
 }

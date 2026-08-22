@@ -40,6 +40,16 @@ Operational status remains conditional on preserving the safety model defined
 in `AGENTS.md` and on re-running appropriate real proof after future runtime or
 relay changes.
 
+## RC.7 two-conversation readiness — 2026-08-22
+
+The RC.7 Desktop implementation adds selection and bounded dialogue between two
+existing Codex App Server conversations. Deterministic tests cover pagination,
+masked selection, atomic pair persistence, exact `thread/resume` routing and
+the three-message one-cycle contract. No RC.7 real proof has been executed in
+this implementation phase. A future proof must be separately authorized after
+the full validation gate, must reuse the selected threads, remain read-only,
+and must stop at the configured cycle limit.
+
 ## Real MCP bridge proof — 2026-08-21
 
 The v0.3.0 MCP server was started as a real STDIO child process. An MCP client

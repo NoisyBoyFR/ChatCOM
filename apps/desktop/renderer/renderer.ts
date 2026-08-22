@@ -5,6 +5,9 @@ import type { UpdateSnapshot } from "../../../src/desktop/updater.js";
 import { SettingsSession, type EditablePreferences } from "../../../src/desktop/settings-session.js";
 import { DesktopStartCoordinator, isDesktopStartEnabled } from "../../../src/desktop/start-policy.js";
 import type { BindingSummary } from "../../../src/desktop/bindings.js";
+import type { ConversationCard } from "../../../src/desktop/conversation-catalog.js";
+import type { ConversationPairSummary } from "../../../src/desktop/conversation-pair.js";
+import type { DialogueSpeaker, DualDialogueEvent, DualDialogueSnapshot } from "../../../src/desktop/dual-dialogue.js";
 
 const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
 const projectRoot = $("project-root") as HTMLInputElement;
@@ -33,6 +36,26 @@ const bindingThreadId = $("binding-thread-id") as HTMLInputElement;
 const bindingStatus = $("binding-status");
 const bindingList = $("binding-list");
 const updateState = $("update-state");
+const conversationSearch = $("conversation-search") as HTMLInputElement;
+const conversationProjectFilter = $("conversation-project-filter") as HTMLInputElement;
+const workConversation = $("work-conversation") as HTMLSelectElement;
+const codexConversation = $("codex-conversation") as HTMLSelectElement;
+const workSelected = $("work-selected");
+const codexSelected = $("codex-selected");
+const firstSpeaker = $("first-speaker") as HTMLSelectElement;
+const dualObjective = $("dual-objective") as HTMLTextAreaElement;
+const dualMaxCycles = $("dual-max-cycles") as HTMLInputElement;
+const dualPairStatus = $("dual-pair-status");
+const dualState = $("dual-state");
+const dualCycle = $("dual-cycle");
+const dualTimeline = $("dual-timeline");
+const dualStart = $("dual-start") as HTMLButtonElement;
+const dualPause = $("dual-pause") as HTMLButtonElement;
+const dualResume = $("dual-resume") as HTMLButtonElement;
+const dualStop = $("dual-stop") as HTMLButtonElement;
+let conversationCards: ConversationCard[] = [];
+let savedConversationPair: ConversationPairSummary | undefined;
+let dualSnapshot: DualDialogueSnapshot = { state: "IDLE", cycle: 0, maxCycles: 3 };
 const settingsSession = new SettingsSession();
 let snapshot: ConversationSnapshot | undefined;
 let preferences: DesktopPreferences | undefined;
@@ -114,6 +137,83 @@ function renderPreflight(next: import("../../../src/desktop/preflight.js").Prefl
   renderStartButton();
   configurationStatus.textContent = next.canStart ? t("preflightReady") : t("preflightRequired");
   configurationStatus.className = next.canStart ? "hint" : "hint error";
+}
+function renderConversationOptions(): void {
+  const render = (select: HTMLSelectElement): void => {
+    const selected = select.value;
+    select.replaceChildren();
+    for (const card of conversationCards) {
+      const option = document.createElement("option");
+      option.value = card.handle;
+      option.textContent = `${card.title} · ${card.projectRoot} · ${card.idTail}`;
+      option.disabled = !card.available;
+      select.append(option);
+    }
+    if (conversationCards.some((card) => card.handle === selected && card.available)) select.value = selected;
+  };
+  render(workConversation);
+  render(codexConversation);
+  const describe = (select: HTMLSelectElement, target: HTMLElement): void => {
+    const card = conversationCards.find((entry) => entry.handle === select.value);
+    target.textContent = card === undefined ? t("noConversations") : `${t("selectedConversation")}: ${card.title} · ${card.idTail}`;
+  };
+  describe(workConversation, workSelected);
+  describe(codexConversation, codexSelected);
+}
+function renderDualSnapshot(next: DualDialogueSnapshot): void {
+  dualSnapshot = next;
+  dualState.textContent = next.state;
+  dualCycle.textContent = `${next.cycle} / ${next.maxCycles}`;
+  dualStart.disabled = !savedConversationPair || !["IDLE", "COMPLETED", "FAILED"].includes(next.state);
+  dualPause.disabled = next.state !== "RUNNING";
+  dualResume.disabled = next.state !== "PAUSED";
+  dualStop.disabled = !["RUNNING", "PAUSE_REQUESTED", "STOPPING", "PAUSED"].includes(next.state);
+}
+function renderDualMessage(event: Extract<DualDialogueEvent, { kind: "message" }>): void {
+  const card = document.createElement("article");
+  card.className = `message-card ${event.message.sender === "WORK_LOCAL" ? "work" : "codex"}`;
+  const heading = document.createElement("div");
+  heading.className = "message-heading";
+  heading.textContent = `${event.message.sender} → ${event.message.recipient} · ${event.message.type} · ${t("dualCycle", { cycle: event.cycle })}`;
+  const meta = document.createElement("div");
+  meta.className = "message-meta";
+  meta.textContent = `${event.message.created_at} · sequence ${event.message.sequence}`;
+  const content = document.createElement("p");
+  content.textContent = event.message.content;
+  card.append(heading, meta, content);
+  dualTimeline.append(card);
+  if (preferences?.autoScroll !== false) dualTimeline.scrollTop = dualTimeline.scrollHeight;
+}
+function handleDualEvent(event: DualDialogueEvent): void {
+  if (event.kind === "state") { renderDualSnapshot({ ...dualSnapshot, state: event.state, cycle: event.cycle }); return; }
+  if (event.kind === "message") { renderDualMessage(event); return; }
+  dualPairStatus.textContent = event.code;
+  dualPairStatus.className = "hint error";
+}
+async function refreshConversations(): Promise<void> {
+  try {
+    conversationCards = await window.chatcomDesktop.discoverConversations({ projectRoot: conversationProjectFilter.value.trim() || undefined, searchTerm: conversationSearch.value.trim() || undefined });
+    renderConversationOptions();
+    dualPairStatus.textContent = conversationCards.length === 0 ? t("noConversations") : t("dualReady");
+    dualPairStatus.className = "hint";
+  } catch (error) { dualPairStatus.textContent = t("discoveryFailed"); dualPairStatus.className = "hint error"; showError(error); }
+}
+function selectedConversation(handle: string): ConversationCard | undefined { return conversationCards.find((card) => card.handle === handle); }
+async function saveConversationPair(): Promise<void> {
+  const work = selectedConversation(workConversation.value);
+  const codex = selectedConversation(codexConversation.value);
+  const max = Number(dualMaxCycles.value);
+  if (!work || !codex) { dualPairStatus.textContent = t("dualNoSelection"); dualPairStatus.className = "hint error"; return; }
+  if (work.handle === codex.handle) { dualPairStatus.textContent = t("duplicateConversation"); dualPairStatus.className = "hint error"; return; }
+  if (work.projectRoot !== "UNKNOWN" && codex.projectRoot !== "UNKNOWN" && work.projectRoot !== codex.projectRoot) { dualPairStatus.textContent = t("projectsDifferent"); dualPairStatus.className = "hint error"; return; }
+  if (!Number.isInteger(max) || max < 1 || max > 10) { dualPairStatus.textContent = t("invalidNumber"); dualPairStatus.className = "hint error"; return; }
+  try {
+    const result = await window.chatcomDesktop.saveConversationPair({ workHandle: work.handle, codexHandle: codex.handle, projectRoot: projectRoot.value, phase: phase.value || "RC7", point: point.value || "DUAL_DIALOGUE", objective: dualObjective.value, firstSpeaker: firstSpeaker.value as DialogueSpeaker, maxCycles: max, cycleTimeoutMs: Number(cycleTimeout.value) });
+    savedConversationPair = result.pair;
+    renderDualSnapshot(result.snapshot);
+    dualPairStatus.textContent = t("pairSaved");
+    dualPairStatus.className = "hint";
+  } catch (error) { showError(error); }
 }
 function renderTransmission(cycle: number, message: Extract<ConversationEvent, { kind: "transmission" }>["message"]): void {
   const card = document.createElement("article"); card.className = `message-card ${message.sender === "WORK_HOST" ? "work-host" : message.sender === "WORK_LOCAL" ? "work" : message.sender === "USER" ? "user" : "codex"}`;
@@ -234,6 +334,15 @@ function focusableSettingsElements(): HTMLElement[] {
 $("open-settings").addEventListener("click", openSettings);
 settingsSave.addEventListener("click", () => { void saveSettings(); });
 settingsCancel.addEventListener("click", cancelSettings);
+$("refresh-conversations").addEventListener("click", () => { void refreshConversations(); });
+workConversation.addEventListener("change", renderConversationOptions);
+codexConversation.addEventListener("change", renderConversationOptions);
+$("save-conversation-pair").addEventListener("click", () => { void saveConversationPair(); });
+dualStart.addEventListener("click", async () => { try { dualTimeline.replaceChildren(); renderDualSnapshot(await window.chatcomDesktop.startDualDialogue()); setStatus(t("dualStarted")); } catch (error) { showError(error); } });
+dualPause.addEventListener("click", async () => { try { renderDualSnapshot(await window.chatcomDesktop.pauseDualDialogue()); setStatus(t("dualPaused")); } catch (error) { showError(error); } });
+dualResume.addEventListener("click", async () => { try { renderDualSnapshot(await window.chatcomDesktop.resumeDualDialogue()); setStatus(t("dualResumed")); } catch (error) { showError(error); } });
+dualStop.addEventListener("click", async () => { try { renderDualSnapshot(await window.chatcomDesktop.stopDualDialogue()); setStatus(t("dualStopped")); } catch (error) { showError(error); } });
+$("dual-clear").addEventListener("click", () => { dualTimeline.replaceChildren(); });
 for (const id of ["language", "theme", "window-mode", "text-size", "reduce-motion", "auto-scroll", "auto-update", "update-channel"]) $(id).addEventListener("change", updateSettingsDraft);
 checkUpdates.addEventListener("click", async () => { try { renderUpdateState(await window.chatcomDesktop.checkForUpdates()); } catch (error) { showError(error); } });
 restartUpdate.addEventListener("click", async () => { try { await window.chatcomDesktop.restartAndInstall(); } catch (error) { showError(error); } });
@@ -287,8 +396,11 @@ $("export-report").addEventListener("click", async () => { try { const result = 
 $("reset-preferences").addEventListener("click", async () => { if (!window.confirm(t("resetConfirm"))) return; try { await window.chatcomDesktop.resetPreferences(); const state = await window.chatcomDesktop.getState(); preferences = state.preferences; setLanguage(preferences.language); applyDisplaySettings(preferences); setSettingsControls(preferences); setStatus(t("resetDone")); } catch (error) { showError(error); } });
 mission.addEventListener("input", updateMissionCount);
 window.chatcomDesktop.onEvent(handleEvent);
+window.chatcomDesktop.onDualEvent(handleDualEvent);
 window.chatcomDesktop.onUpdate(renderUpdateState);
 void window.chatcomDesktop.getUpdateState().then(renderUpdateState).catch(showError);
 void refreshBindings();
+void refreshConversations();
+void window.chatcomDesktop.getConversationPair().then((pair) => { savedConversationPair = pair; if (pair) { firstSpeaker.value = pair.firstSpeaker; dualObjective.value = pair.objective; dualMaxCycles.value = String(pair.maxCycles); dualPairStatus.textContent = `${t("pairSaved")}: ${pair.workTitle} · ${pair.codexTitle}`; } renderDualSnapshot(dualSnapshot); }).catch(showError);
 void window.chatcomDesktop.getState().then((state) => { preferences = state.preferences; locale = preferences.language; setLanguage(locale); applyDisplaySettings(preferences); projectRoot.value = preferences.projectRoot ?? ""; phase.value = preferences.phase ?? ""; point.value = preferences.point ?? ""; maxCycles.value = String(preferences.maxCycles); setSettingsControls(preferences); renderPreflight(state.preflight); renderSnapshot(state.snapshot); }).catch(showError);
-setLanguage(locale); updateMissionCount(); setStatus(t("ready")); setInterval(() => { if (snapshot) renderSnapshot(snapshot); }, 1000);
+setLanguage(locale); updateMissionCount(); renderDualSnapshot(dualSnapshot); setStatus(t("ready")); setInterval(() => { if (snapshot) renderSnapshot(snapshot); }, 1000);

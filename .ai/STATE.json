@@ -1,10 +1,10 @@
 {
   "project": "ChatCOM",
   "schema_version": "1.0",
-  "status": "RC6_RELEASE_READINESS",
+  "status": "RC7_IMPLEMENTATION",
   "source": "FitMyLife portable Work-Codex relay",
-  "current_scope": "ChatCOM 1.0.0-rc.6 release-readiness candidate with opt-in persistent Codex thread bindings, exact resume semantics, bounded MCP lifecycle, read-only security and deterministic validation",
+  "current_scope": "ChatCOM 1.0.0-rc.7 candidate with bounded two-conversation Codex App Server dialogue, exact resume semantics, masked selection, read-only security and deterministic validation",
   "real_w1_operational": true,
   "real_mcp_bridge_operational": true,
-  "next_step": "Complete the RC.6 validation, PR and CI merge; keep real bound-work proof, tag, GitHub Release, public update feed and npm publication separately authorized"
+  "next_step": "Complete RC.7 validation, PR and CI merge; keep the single real two-conversation proof, tag, GitHub Release, public update feed, SignPath and npm publication separately authorized"
 }

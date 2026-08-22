@@ -28,7 +28,7 @@ test("SignPath workflow is manual, main-only, pinned and publication-blocked", a
   const workflow = await readFile(".github/workflows/sign-windows.yml", "utf8");
   assert.match(workflow, /workflow_dispatch:/u);
   assert.match(workflow, /confirmation:/u);
-  assert.match(workflow, /SIGN_RC6/u);
+  assert.match(workflow, /SIGN_RC7/u);
   assert.match(workflow, /environment: windows-code-signing/u);
   assert.match(workflow, /CHATCOM_REF -cne "refs\/heads\/main"/u);
   assert.match(workflow, /provider=SIGNPATH/u);
@@ -59,7 +59,7 @@ test("signing policy documents independent verification and no unsigned publicat
   assert.match(workflow, /verify-windows-signature\.ps1[\s\S]*-ExpectedSubject[\s\S]*-RequireTimestamp/u);
   assert.match(workflow, /signatureState -cne "SIGNED"/u);
   assert.match(policy, /must not be attached to a public\s+release/u);
-  assert.match(release, /RC\.6 signing gate/u);
+  assert.match(release, /RC\.7 signing gate/u);
   assert.match(verifier, /PUBLISHER_EXPECTED_MISSING/u);
   assert.match(verifier, /PUBLISHER_MISMATCH/u);
   const packageVerifier = await readFile("scripts/verify-desktop-package.mjs", "utf8");

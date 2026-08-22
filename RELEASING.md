@@ -63,12 +63,12 @@ https://github.com/NoisyBoyFR/ChatCOM/releases/download/v1.0.0-rc.3/ChatCOM-Desk
 The release must remain marked as a pre-release. It is not the stable `v1.0.0`
 release and does not authorize npm publication.
 
-## RC.6 signing gate
+## RC.7 signing gate
 
-RC.6 remains a source candidate until the owner completes the SignPath
+RC.7 remains a source candidate until the owner completes the SignPath
 Foundation open-source application and configures the protected
 `windows-code-signing` environment. Run `.github/workflows/sign-windows.yml`
-manually from `main` with `SIGN_RC6` only after that external approval. The
+manually from `main` with `SIGN_RC7` only after that external approval. The
 workflow produces no tag, GitHub Release, update feed, or npm publication. It
 must report `SIGNED`, pass independent Authenticode subject and timestamp
 checks for the application and Setup, and emit final SHA-256 hashes before a
@@ -133,7 +133,7 @@ silently downgrades.
 
 The protected manual signing workflow is `.github/workflows/sign-windows.yml`.
 It runs only from `main`, requires the `windows-code-signing` environment and
-the exact `SIGN_RC6` confirmation, submits one request through the official
+the exact `SIGN_RC7` confirmation, submits one request through the official
 SignPath GitHub trusted build action pinned to a full commit SHA, and verifies
 the signed application and final Setup before hash and manifest generation. The
 workflow only uploads temporary input and signed validation artifacts; it has
@@ -143,4 +143,4 @@ The repository owner must complete the identity validation, Public Trust
 certificate profile, federated credential, role assignment, and protected
 environment variables described in [WINDOWS-SIGNING.md](WINDOWS-SIGNING.md).
 Until that external setup exists and the workflow proves a valid publisher and
-timestamp, RC.6 publication remains blocked.
+timestamp, RC.7 publication remains blocked.

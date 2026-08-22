@@ -11,7 +11,7 @@
 
 [![Télécharger ChatCOM Desktop](https://img.shields.io/badge/Télécharger-ChatCOM_Desktop_pour_Windows-0078D4?style=for-the-badge&logo=windows11&logoColor=white)](https://github.com/NoisyBoyFR/ChatCOM/releases/download/v1.0.0-rc.3/ChatCOM-Desktop-1.0.0-rc.3-Setup.exe)
 
-**Version candidate du code source :** `1.0.0-rc.6` · Windows x64 · le workflow Artifact Signing protégé est prêt, mais les mises à jour publiques restent désactivées tant que l’identité externe et le profil de certificat ne sont pas configurés
+**Version candidate du code source :** `1.0.0-rc.7` · Windows x64 · deux conversations Codex existantes peuvent être sélectionnées pour un dialogue borné en lecture seule ; les mises à jour publiques restent désactivées tant que l’identité externe et le profil de certificat ne sont pas configurés
 
 ## Qu’est-ce que ChatCOM ?
 
@@ -47,6 +47,7 @@ La route `WORK_HOST` est la seule éligible à une preuve WORK ↔ Codex réelle
 - diagnostics bornés sans prompt, réponse, identifiant de thread, secret ni stack trace.
 - l’état Desktop distingue `WORK_HOST`, `CODEX_LOCAL`, `USER`, `REAL_WORK_HOST` et `LOCAL_SIMULATION` ;
 - RC.6 ajoute le choix explicite entre conversation temporaire et conversation Codex liée ; une liaison reprend un fil par UUID exact et le conserve après le nettoyage. Voir [les liaisons persistantes](PERSISTENT-BINDINGS.md).
+- RC.7 détecte deux conversations Codex existantes via l’App Server, les nomme WORK/CODEX, reprend les threads exacts dans un dialogue borné en lecture seule et restaure la paire sans démarrage automatique. Voir [le dialogue à deux conversations](DUAL-CONVERSATION-DIALOGUE.md).
 
 ## Télécharger et installer sur Windows
 
@@ -128,7 +129,7 @@ npm run desktop:make
 Installateur attendu :
 
 ```text
-out-desktop/make/squirrel.windows/x64/ChatCOM-Desktop-1.0.0-rc.6-Setup.exe
+out-desktop/make/squirrel.windows/x64/ChatCOM-Desktop-1.0.0-rc.7-Setup.exe
 ```
 
 `npm run verify` exécute le build, les vérifications TypeScript du noyau et de Desktop, les tests déterministes, la validation de configuration, l’audit des dépendances de production et le contrôle du paquet npm. Les commandes de diagnostic peuvent contacter un runtime Codex réel et nécessitent une autorisation explicite.

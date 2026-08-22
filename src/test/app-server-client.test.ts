@@ -144,6 +144,32 @@ test("starts non-ephemeral read-only threads", async () => {
   assert.deepEqual(await started, { id: "thread-1" });
 });
 
+test("lists, paginates and resumes existing read-only conversations without creating threads", async () => {
+  const peer = new FakePeer();
+  const client = await initializedClient(peer);
+  const listed = client.listAllThreads({ cwd: "C:\\synthetic", sourceKinds: ["cli", "vscode"] });
+  assert.equal((peer.sent.at(-1) as { method: string }).method, "thread/list");
+  assert.deepEqual((peer.sent.at(-1) as { params: unknown }).params, { cursor: null, limit: 100, archived: false, cwd: "C:\\synthetic", sourceKinds: ["cli", "vscode"] });
+  peer.emit({ jsonrpc: "2.0", id: requestId(peer), result: { data: [{ id: "thread-a", title: "A", source: "vscode" }], nextCursor: "page-2" } });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal((peer.sent.at(-1) as { method: string }).method, "thread/list");
+  assert.equal((peer.sent.at(-1) as { params: { cursor: string } }).params.cursor, "page-2");
+  peer.emit({ jsonrpc: "2.0", id: requestId(peer), result: { data: [{ id: "thread-b", title: "B", sourceKind: "cli" }] } });
+  assert.deepEqual(await listed, [{ id: "thread-a", title: "A", source: "vscode", sourceKind: "vscode" }, { id: "thread-b", title: "B", sourceKind: "cli" }]);
+
+  const loaded = client.listLoadedThreads();
+  peer.emit({ jsonrpc: "2.0", id: requestId(peer), result: { data: ["thread-a"] } });
+  assert.deepEqual(await loaded, ["thread-a"]);
+
+  const resumed = client.resumeThread("thread-a");
+  const resumeRequest = peer.sent.at(-1) as { method: string; params: Record<string, unknown> };
+  assert.equal(resumeRequest.method, "thread/resume");
+  assert.deepEqual(resumeRequest.params, { threadId: "thread-a", excludeTurns: true, sandbox: "read-only", approvalPolicy: "never" });
+  peer.emit({ jsonrpc: "2.0", id: requestId(peer), result: { thread: { id: "thread-a" } } });
+  assert.deepEqual(await resumed, { id: "thread-a" });
+  await client.close();
+});
+
 test("lists models and passes an explicit model to isolated threads", async () => {
   const peer = new FakePeer();
   const client = await initializedClient(peer);

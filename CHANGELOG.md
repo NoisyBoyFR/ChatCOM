@@ -4,6 +4,20 @@ All notable ChatCOM changes are recorded in this file. Dates use the ISO `YYYY-M
 
 ## [Unreleased]
 
+## [1.0.0-rc.7] - 2026-08-22
+
+### Added
+
+- Bounded Desktop dialogue between two existing Codex App Server conversations selected by the user.
+- Paginated conversation discovery with source allowlisting, masked identifiers, loaded/available state, and atomic local pair persistence.
+- Exact `thread/resume` and `turn/start` routing with read-only sandbox, `approvalPolicy: never`, pause/resume/stop controls, and a hard 1–10 cycle limit.
+- French, English, Simplified Chinese, and Russian controls for pair selection and supervised dialogue.
+
+### Security
+
+- RC.7 never creates, forks, deletes, or scrapes selected conversations; full thread identifiers stay in the main process and local pair store only.
+- No automatic start occurs after restoring a pair. Real proof remains separately authorized and public updates remain blocked until signed artifacts are verified.
+
 - RC.6: added explicit `EPHEMERAL` and `PERSISTENT_BOUND` Codex conversation lifecycles with exact UUID binding and project validation.
 - RC.6: added an atomic local binding registry, masked aliases, bounded MCP binding operations, and Desktop binding management in French, English, Simplified Chinese, and Russian.
 - RC.6: added SDK `resumeThread()` support that preserves bound Codex sessions and never calls `deleteThread()` for persistent cleanup; RC.5 ephemeral deletion remains unchanged.

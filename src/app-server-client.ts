@@ -164,6 +164,26 @@ export interface AppServerThread {
   id: string;
 }
 
+export interface AppServerThreadSummary {
+  id: string;
+  preview?: string;
+  title?: string;
+  cwd?: string;
+  createdAt?: number;
+  updatedAt?: number;
+  source?: string;
+  sourceKind?: string;
+  status?: string;
+}
+
+export interface AppServerThreadListOptions {
+  cursor?: string;
+  limit?: number;
+  cwd?: string;
+  searchTerm?: string;
+  sourceKinds?: readonly string[];
+}
+
 export interface AppServerModel {
   id: string;
   isDefault?: boolean;
@@ -526,6 +546,72 @@ export class AppServerClient {
     });
     if (!response.thread || typeof response.thread.id !== "string") throw new AppServerClientError("INVALID_THREAD_RESPONSE");
     return response.thread;
+  }
+
+  async resumeThread(threadId: string): Promise<AppServerThread> {
+    if (!this.initialized) throw new AppServerClientError("NOT_INITIALIZED");
+    if (typeof threadId !== "string" || threadId.trim().length === 0) throw new AppServerClientError("THREAD_ID_INVALID");
+    const response = await this.request<{ thread?: AppServerThread }>("thread/resume", {
+      threadId,
+      excludeTurns: true,
+      sandbox: "read-only",
+      approvalPolicy: "never",
+    });
+    if (!response.thread || response.thread.id !== threadId) throw new AppServerClientError("INVALID_THREAD_RESPONSE");
+    return response.thread;
+  }
+
+  async listThreads(options: AppServerThreadListOptions = {}): Promise<{ data: AppServerThreadSummary[]; nextCursor?: string }> {
+    if (!this.initialized) throw new AppServerClientError("NOT_INITIALIZED");
+    const response = await this.request<{ data?: unknown[]; nextCursor?: unknown }>("thread/list", {
+      cursor: options.cursor ?? null,
+      limit: options.limit ?? 100,
+      archived: false,
+      ...(options.cwd === undefined ? {} : { cwd: options.cwd }),
+      ...(options.searchTerm === undefined ? {} : { searchTerm: options.searchTerm }),
+      sourceKinds: [...(options.sourceKinds ?? ["cli", "vscode", "exec", "appServer", "unknown"])],
+    });
+    if (!Array.isArray(response.data)) throw new AppServerClientError("INVALID_THREAD_LIST_RESPONSE");
+    const data = response.data
+      .map((value) => recordObject(value))
+      .filter((value): value is Record<string, unknown> => value !== undefined && typeof value.id === "string" && value.id.length > 0)
+      .map((value) => {
+        const status = recordObject(value.status);
+        const source = typeof value.source === "string" ? value.source : undefined;
+        const sourceKind = typeof value.sourceKind === "string" ? value.sourceKind : source;
+        return {
+          id: value.id as string,
+          ...(typeof value.preview === "string" ? { preview: value.preview } : {}),
+          ...(typeof value.title === "string" ? { title: value.title } : {}),
+          ...(typeof value.cwd === "string" ? { cwd: value.cwd } : {}),
+          ...(typeof value.createdAt === "number" ? { createdAt: value.createdAt } : {}),
+          ...(typeof value.updatedAt === "number" ? { updatedAt: value.updatedAt } : {}),
+          ...(source === undefined ? {} : { source }),
+          ...(sourceKind === undefined ? {} : { sourceKind }),
+          ...(typeof status?.type === "string" ? { status: status.type } : {}),
+        };
+      });
+    if (response.nextCursor !== undefined && response.nextCursor !== null && typeof response.nextCursor !== "string") throw new AppServerClientError("INVALID_THREAD_CURSOR");
+    return { data, ...(typeof response.nextCursor === "string" ? { nextCursor: response.nextCursor } : {}) };
+  }
+
+  async listAllThreads(options: Omit<AppServerThreadListOptions, "cursor"> = {}): Promise<AppServerThreadSummary[]> {
+    const all: AppServerThreadSummary[] = [];
+    let cursor: string | undefined;
+    for (let page = 0; page < 128; page += 1) {
+      const result = await this.listThreads({ ...options, ...(cursor === undefined ? {} : { cursor }) });
+      all.push(...result.data);
+      if (result.nextCursor === undefined) return all;
+      cursor = result.nextCursor;
+    }
+    throw new AppServerClientError("THREAD_LIST_PAGINATION_EXCEEDED");
+  }
+
+  async listLoadedThreads(): Promise<string[]> {
+    if (!this.initialized) throw new AppServerClientError("NOT_INITIALIZED");
+    const response = await this.request<{ data?: unknown[] }>("thread/loaded/list", {});
+    if (!Array.isArray(response.data) || response.data.some((value) => typeof value !== "string")) throw new AppServerClientError("INVALID_LOADED_THREAD_LIST_RESPONSE");
+    return response.data as string[];
   }
 
   async listModels(): Promise<readonly AppServerModel[]> {

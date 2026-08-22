@@ -23,6 +23,13 @@ It creates exactly one Codex thread in read-only mode with
 it only validates the host's next prompt and performs cleanup. Abandoned
 exchanges expire in memory and are cleaned automatically.
 
+For RC.6, omit `binding_id` to exercise the default `EPHEMERAL` mode. To use a
+bound conversation, first validate a local `binding_id` with the binding tools and
+then pass it to `chatcom_work_open`. ChatCOM resumes the exact UUID only after
+canonical project validation. Completion returns `thread_preserved=CONFIRMED`
+and never calls `deleteThread()` in that mode. The full thread ID is never part
+of returned diagnostics or proof reports.
+
 `chatcom_run_relay` is a compatibility route named `LOCAL_SIMULATION`. It is
 useful for deterministic tests but must never be reported as a real host proof.
 If the current session is not a genuine WORK MCP host, stop after local tests

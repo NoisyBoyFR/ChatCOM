@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { AppServerClientError, type SafeTurnDiagnostic } from "./app-server-client.js";
 import { createCodexSdkRelayClient, type CodexSdkRelayClient } from "./codex-sdk-relay.js";
 import { DEFAULT_CODEX_LOCAL_INSTRUCTIONS, RelayFailure } from "./local-relay.js";
+import { BindingStore, type BindingMode } from "./desktop/bindings.js";
 import { createMessageOutputSchema, parseMessageText, type MessageEnvelope, validateMessage } from "./message-contract.js";
 import type { PortableRelayConfig } from "./relay-config.js";
 
@@ -11,6 +12,7 @@ const MAX_EXCHANGE_TIMEOUT_MS = 3_600_000;
 export interface WorkHostBridgeDependencies {
   createClient(projectRoot: string, timeoutMs: number): Promise<CodexSdkRelayClient>;
   randomUUID(): string;
+  bindingStore?: BindingStore;
 }
 const DEFAULT_DEPENDENCIES: WorkHostBridgeDependencies = {
   createClient: (projectRoot, timeoutMs) => createCodexSdkRelayClient(projectRoot, { timeoutMs }),
@@ -24,6 +26,8 @@ interface ActiveExchange {
   point: string;
   client: CodexSdkRelayClient;
   threadId: string;
+  mode: "EPHEMERAL" | BindingMode;
+  bindingId?: string;
   timer: NodeJS.Timeout;
 }
 
@@ -40,6 +44,10 @@ export interface WorkHostOpenResult {
   completedTransmissions: 2;
   cleanup: "PENDING";
   stoppedBeforeSecondCodexMission: true;
+  conversationMode: "EPHEMERAL" | BindingMode;
+  bindingId?: string;
+  threadPreserved: "PENDING";
+  threadDeleted: "PENDING";
 }
 
 export interface WorkHostCompleteResult {
@@ -54,6 +62,10 @@ export interface WorkHostCompleteResult {
   completedTransmissions: 3;
   cleanup: "CONFIRMED";
   stoppedBeforeSecondCodexMission: true;
+  conversationMode: "EPHEMERAL" | BindingMode;
+  bindingId?: string;
+  threadPreserved: "CONFIRMED" | "PENDING";
+  threadDeleted: "CONFIRMED" | "PENDING";
 }
 
 function errorCode(error: unknown, fallback: string): string {
@@ -104,15 +116,15 @@ function reportPrompt(mission: MessageEnvelope): string {
   return `Review the following validated read-only mission from the external WORK host. Do not modify files, run a second mission, or invent authorization. Return one JSON REPORT envelope only. Mission: ${JSON.stringify(mission)}`;
 }
 
-async function cleanupClient(client: CodexSdkRelayClient, threadId?: string): Promise<{ failures: string[]; errors: string[] }> {
+async function cleanupClient(client: CodexSdkRelayClient, threadId: string | undefined, mode: "EPHEMERAL" | BindingMode): Promise<{ failures: string[]; errors: string[] }> {
   const failures: string[] = [];
   const errors: string[] = [];
-  if (threadId !== undefined) {
+  if (threadId !== undefined && mode === "EPHEMERAL") {
     try { await client.deleteThread(threadId); }
     catch (error) { failures.push("CODEX_THREAD"); errors.push(errorCode(error, "THREAD_DELETE_FAILED")); }
   }
   try {
-    const closed = await client.close();
+    const closed = await client.close(mode === "PERSISTENT_BOUND" && threadId !== undefined ? { preserveThreadIds: [threadId] } : undefined);
     if (!closed.exited || closed.forced) errors.push("CLIENT_CLOSE_UNCONFIRMED");
   } catch { errors.push("CLIENT_CLOSE_FAILED"); }
   return { failures, errors };
@@ -120,10 +132,11 @@ async function cleanupClient(client: CodexSdkRelayClient, threadId?: string): Pr
 
 export class WorkHostBridge {
   private readonly exchanges = new Map<string, ActiveExchange>();
+  private readonly bindingStore: BindingStore;
 
-  constructor(private readonly dependencies: WorkHostBridgeDependencies = DEFAULT_DEPENDENCIES) {}
+  constructor(private readonly dependencies: WorkHostBridgeDependencies = DEFAULT_DEPENDENCIES) { this.bindingStore = dependencies.bindingStore ?? new BindingStore(); }
 
-  async open(config: PortableRelayConfig, mission: MessageEnvelope, timeoutMs?: number, idleTimeoutMs?: number, signal?: AbortSignal): Promise<WorkHostOpenResult> {
+  async open(config: PortableRelayConfig, mission: MessageEnvelope, timeoutMs?: number, idleTimeoutMs?: number, signal?: AbortSignal, bindingId?: string): Promise<WorkHostOpenResult> {
     assertMission(mission, config);
     const sessionId = mission.session_id;
     if (this.exchanges.has(sessionId)) throw new RelayFailure("WORK_HOST_SESSION_REPLAY");
@@ -132,11 +145,21 @@ export class WorkHostBridge {
     const idleTimeout = validateTimeout(idleTimeoutMs, Math.min(DEFAULT_IDLE_TIMEOUT_MS, turnTimeout), "WORK_HOST_IDLE_TIMEOUT_INVALID");
     let client: CodexSdkRelayClient | undefined;
     let threadId: string | undefined;
+    let binding: Awaited<ReturnType<BindingStore["get"]>> | undefined;
+    if (bindingId !== undefined) {
+      try { binding = await this.bindingStore.get(bindingId, config.projectRoot); }
+      catch (error) {
+        const code = error instanceof Error && ["BINDING_ID_INVALID", "BINDING_NOT_FOUND", "BINDING_PROJECT_DIFFERENT", "BINDING_PROJECT_UNAVAILABLE", "BINDING_REGISTRY_INVALID"].includes(error.message) ? error.message : "BINDING_INVALID";
+        throw new RelayFailure(code);
+      }
+    }
+    const mode: "EPHEMERAL" | BindingMode = binding === undefined ? "EPHEMERAL" : "PERSISTENT_BOUND";
     let primaryError: unknown;
     try {
       client = await this.dependencies.createClient(config.projectRoot, turnTimeout);
       await client.initialize();
-      threadId = await client.startThread(DEFAULT_CODEX_LOCAL_INSTRUCTIONS, config.projectRoot);
+      if (mode === "PERSISTENT_BOUND" && client.resumeThread === undefined) throw new RelayFailure("THREAD_RESUME_UNSUPPORTED");
+      threadId = mode === "PERSISTENT_BOUND" ? await client.resumeThread?.(binding?.threadId as string, config.projectRoot) as string : await client.startThread(DEFAULT_CODEX_LOCAL_INSTRUCTIONS, config.projectRoot);
       const report = parseMessageText(await client.runTurn(
         threadId,
         reportPrompt(mission),
@@ -153,15 +176,17 @@ export class WorkHostBridge {
         point: config.point,
         client,
         threadId,
+        mode,
+        ...(bindingId === undefined ? {} : { bindingId }),
         timer: setTimeout(() => { void this.expire(sessionId); }, Math.min(turnTimeout, idleTimeout)),
       };
       this.exchanges.set(sessionId, exchange);
-      return { status: "REPORT_READY", communicationMode: "REAL_WORK_HOST", workHost: "MCP_HOST", workAuthentication: "WORK_AUTH_MANAGED_BY_HOST", codexAuthentication: "CODEX_AUTH_READY", security: "READ_ONLY", sessionId, report, transmissions: 2, completedTransmissions: 2, cleanup: "PENDING", stoppedBeforeSecondCodexMission: true };
+      return { status: "REPORT_READY", communicationMode: "REAL_WORK_HOST", workHost: "MCP_HOST", workAuthentication: "WORK_AUTH_MANAGED_BY_HOST", codexAuthentication: "CODEX_AUTH_READY", security: "READ_ONLY", sessionId, report, transmissions: 2, completedTransmissions: 2, cleanup: "PENDING", stoppedBeforeSecondCodexMission: true, conversationMode: mode, ...(bindingId === undefined ? {} : { bindingId }), threadPreserved: "PENDING", threadDeleted: "PENDING" };
     } catch (error) {
       primaryError = error;
     }
     if (client !== undefined) {
-      const cleanup = await cleanupClient(client, threadId);
+      const cleanup = await cleanupClient(client, threadId, mode);
       const diagnostic = primaryError instanceof RelayFailure
         ? primaryError.primaryDiagnostic
         : primaryError instanceof AppServerClientError
@@ -184,9 +209,9 @@ export class WorkHostBridge {
     catch (error) { throw error instanceof RelayFailure ? new RelayFailure(error.code, [], [], [], ["EXCHANGE_OPEN"], undefined, "WORK_NEXT_PROMPT", 2) : error; }
     clearTimeout(exchange.timer);
     this.exchanges.delete(sessionId);
-    const cleanup = await cleanupClient(exchange.client, exchange.threadId);
+    const cleanup = await cleanupClient(exchange.client, exchange.threadId, exchange.mode);
     if (cleanup.failures.length > 0 || cleanup.errors.length > 0) throw new RelayFailure("CLEANUP_FAILED", cleanup.failures, [], [], cleanup.errors, undefined, "WORK_NEXT_PROMPT", 3);
-    return { status: "SUCCESS", communicationMode: "REAL_WORK_HOST", workHost: "MCP_HOST", workAuthentication: "WORK_AUTH_MANAGED_BY_HOST", codexAuthentication: "CODEX_AUTH_READY", security: "READ_ONLY", sessionId, transmissions: 3, completedTransmissions: 3, cleanup: "CONFIRMED", stoppedBeforeSecondCodexMission: true };
+    return { status: "SUCCESS", communicationMode: "REAL_WORK_HOST", workHost: "MCP_HOST", workAuthentication: "WORK_AUTH_MANAGED_BY_HOST", codexAuthentication: "CODEX_AUTH_READY", security: "READ_ONLY", sessionId, transmissions: 3, completedTransmissions: 3, cleanup: "CONFIRMED", stoppedBeforeSecondCodexMission: true, conversationMode: exchange.mode, ...(exchange.bindingId === undefined ? {} : { bindingId: exchange.bindingId }), threadPreserved: exchange.mode === "PERSISTENT_BOUND" ? "CONFIRMED" : "PENDING", threadDeleted: exchange.mode === "EPHEMERAL" ? "CONFIRMED" : "PENDING" };
   }
 
   private async expire(sessionId: string): Promise<void> {
@@ -194,7 +219,7 @@ export class WorkHostBridge {
     if (!exchange) return;
     this.exchanges.delete(sessionId);
     clearTimeout(exchange.timer);
-    await cleanupClient(exchange.client, exchange.threadId);
+    await cleanupClient(exchange.client, exchange.threadId, exchange.mode);
   }
 
   activeExchangeCount(): number { return this.exchanges.size; }

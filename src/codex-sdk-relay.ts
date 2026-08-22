@@ -33,7 +33,7 @@ const ALLOWED_STREAM_EVENTS = new Set(["thread.started", "turn.started", "turn.c
 const KNOWN_OMITTED_STREAM_EVENTS = new Set(["item.started", "item.updated", "item.completed"]);
 
 type SdkThread = Pick<Thread, "runStreamed"> & { id: string | null };
-type SdkClient = Pick<Codex, "startThread">;
+type SdkClient = Pick<Codex, "startThread"> & Partial<Pick<Codex, "resumeThread">>;
 type SdkStreamed = Awaited<ReturnType<SdkThread["runStreamed"]>>;
 type StreamStartOutcome =
   | { kind: "started"; streamed: SdkStreamed }
@@ -68,9 +68,10 @@ export interface CodexSdkRelayOptions {
 export interface CodexSdkRelayClient {
   initialize(): Promise<void>;
   startThread(instructions: string, cwd: string): Promise<string>;
+  resumeThread?(threadId: string, cwd: string): Promise<string>;
   runTurn(threadId: string, prompt: string, outputSchema?: unknown, signal?: AbortSignal): Promise<string>;
   deleteThread(threadId: string): Promise<void>;
-  close(): Promise<AppServerCloseResult>;
+  close(options?: { preserveThreadIds?: readonly string[] }): Promise<AppServerCloseResult>;
 }
 
 type OwnedThread = { thread: SdkThread; cwd: string; instructions: string; firstTurn: boolean };
@@ -272,6 +273,17 @@ export class CodexSdkRelayClientImpl implements CodexSdkRelayClient {
     return id;
   }
 
+  async resumeThread(threadId: string, cwd: string): Promise<string> {
+    if (this.closed) throw new AppServerClientError("PROCESS_CLOSED");
+    if (typeof threadId !== "string" || threadId.trim().length === 0) throw new AppServerClientError("THREAD_ID_INVALID");
+    const threadOptions: ThreadOptions = { workingDirectory: cwd, skipGitRepoCheck: true, sandboxMode: "read-only", approvalPolicy: "never" };
+    if (this.codex.resumeThread === undefined) throw new AppServerClientError("THREAD_RESUME_UNSUPPORTED");
+    const thread = this.codex.resumeThread(threadId, threadOptions) as SdkThread;
+    const id = `sdk-thread-${this.nextThreadId++}`;
+    this.threads.set(id, { thread, cwd, instructions: "", firstTurn: false });
+    return id;
+  }
+
   async runTurn(threadId: string, prompt: string, outputSchema?: unknown, signal?: AbortSignal): Promise<string> {
     if (this.closed) throw new AppServerClientError("PROCESS_CLOSED");
     const owned = this.threads.get(threadId);
@@ -417,7 +429,7 @@ export class CodexSdkRelayClientImpl implements CodexSdkRelayClient {
     if (!this.threads.delete(threadId) && !this.closed) throw new AppServerClientError("THREAD_NOT_FOUND");
   }
 
-  private async removeOwnedSessionFiles(): Promise<void> {
+  private async removeOwnedSessionFiles(preservedThreadIds: ReadonlySet<string> = new Set()): Promise<void> {
     if (this.ownedCodexThreadIds.size === 0) return;
     const currentFiles = await listFiles(this.sessionDirectory);
     for (const path of currentFiles) {
@@ -425,7 +437,7 @@ export class CodexSdkRelayClientImpl implements CodexSdkRelayClient {
       let content: string;
       try { content = await readFile(path, "utf8"); }
       catch { continue; }
-      if ([...this.ownedCodexThreadIds].some((threadId) => content.includes(threadId))) {
+      if ([...this.ownedCodexThreadIds].some((threadId) => !preservedThreadIds.has(threadId) && content.includes(threadId))) {
         const fileStats = await stat(path);
         if (fileStats.isFile()) {
           const { unlink } = await import("node:fs/promises");
@@ -435,11 +447,13 @@ export class CodexSdkRelayClientImpl implements CodexSdkRelayClient {
     }
   }
 
-  async close(): Promise<AppServerCloseResult> {
+  async close(options: { preserveThreadIds?: readonly string[] } = {}): Promise<AppServerCloseResult> {
     if (this.closed) return { exited: true, forced: false };
     this.closed = true;
     const exited = this.activeStreams === 0;
-    await this.removeOwnedSessionFiles();
+    const preserved = new Set(options.preserveThreadIds ?? []);
+    const preservedActualIds = new Set([...this.threads.entries()].map(([id, owned]) => preserved.has(id) ? owned.thread.id : null).filter((id): id is string => id !== null));
+    await this.removeOwnedSessionFiles(preservedActualIds);
     this.threads.clear();
     return { exited, forced: false };
   }

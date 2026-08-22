@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
 import { resolve } from "node:path";
+import { join } from "node:path";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { test } from "node:test";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
@@ -11,6 +14,11 @@ import {
   CHATCOM_WORK_OPEN_TOOL,
   CHATCOM_RELAY_TOOL,
   CHATCOM_VALIDATE_TOOL,
+  CHATCOM_BINDING_CREATE_TOOL,
+  CHATCOM_BINDING_VALIDATE_TOOL,
+  CHATCOM_BINDING_LIST_TOOL,
+  CHATCOM_BINDING_DISABLE_TOOL,
+  CHATCOM_BINDING_REMOVE_TOOL,
   createChatComMcpServer,
   type ChatComMcpDependencies,
 } from "../mcp-server.js";
@@ -18,6 +26,7 @@ import { createMessageForTests, RelayFailure } from "../local-relay.js";
 import { RelayConfigError, type PortableRelayConfig } from "../relay-config.js";
 import type { MessageEnvelope } from "../message-contract.js";
 import type { WorkHostBridge } from "../work-host-bridge.js";
+import { BindingStore } from "../desktop/bindings.js";
 
 const sessionId = "11111111-1111-4111-8111-111111111111";
 
@@ -64,7 +73,7 @@ test("advertises focused tools with accurate safety annotations and server-wide 
   const { server, client } = await connectedClient(dependencies);
   try {
     const listed = await client.listTools();
-    assert.deepEqual(listed.tools.map(({ name }) => name), [CHATCOM_WORK_OPEN_TOOL, CHATCOM_WORK_COMPLETE_TOOL, CHATCOM_VALIDATE_TOOL, CHATCOM_RELAY_TOOL]);
+    assert.deepEqual(listed.tools.map(({ name }) => name), [CHATCOM_WORK_OPEN_TOOL, CHATCOM_BINDING_CREATE_TOOL, CHATCOM_BINDING_VALIDATE_TOOL, CHATCOM_BINDING_LIST_TOOL, CHATCOM_BINDING_DISABLE_TOOL, CHATCOM_BINDING_REMOVE_TOOL, CHATCOM_WORK_COMPLETE_TOOL, CHATCOM_VALIDATE_TOOL, CHATCOM_RELAY_TOOL]);
     const validation = listed.tools.find(({ name }) => name === CHATCOM_VALIDATE_TOOL);
     const legacy = listed.tools.find(({ name }) => name === CHATCOM_RELAY_TOOL);
     assert.equal(validation?.annotations?.readOnlyHint, true);
@@ -79,6 +88,26 @@ test("advertises focused tools with accurate safety annotations and server-wide 
     await client.close();
     await server.close();
   }
+});
+
+test("binding MCP operations are local, serializable and never expose the exact thread id", async () => {
+  const root = await mkdtemp(join(tmpdir(), "chatcom-mcp-binding-"));
+  const store = new BindingStore(join(root, "bindings.json"));
+  const exactThreadId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+  const dependencies: ChatComMcpDependencies = { loadConfig: async () => config(), runRelay: async () => { throw new Error("must-not-run"); }, bindingStore: store };
+  const { server, client } = await connectedClient(dependencies);
+  try {
+    const created = await client.callTool({ name: CHATCOM_BINDING_CREATE_TOOL, arguments: { alias: "FitMyLife CODEX", project_root: process.cwd(), thread_id: exactThreadId } });
+    assert.equal(created.isError, undefined);
+    assert.equal(JSON.stringify(created).includes(exactThreadId), false);
+    const bindingId = (created.structuredContent as { binding_id: string }).binding_id;
+    const listed = await client.callTool({ name: CHATCOM_BINDING_LIST_TOOL, arguments: {} });
+    assert.equal(JSON.stringify(listed).includes(exactThreadId), false);
+    const validated = await client.callTool({ name: CHATCOM_BINDING_VALIDATE_TOOL, arguments: { binding_id: bindingId, project_root: process.cwd() } });
+    assert.equal((validated.structuredContent as { state: string }).state, "VALID");
+    await client.callTool({ name: CHATCOM_BINDING_DISABLE_TOOL, arguments: { binding_id: bindingId } });
+    await client.callTool({ name: CHATCOM_BINDING_REMOVE_TOOL, arguments: { binding_id: bindingId } });
+  } finally { await client.close(); await server.close(); await rm(root, { recursive: true, force: true }); }
 });
 
 test("exposes the two-call WORK_HOST protocol with bounded diagnostics", async () => {

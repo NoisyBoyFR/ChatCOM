@@ -4,6 +4,20 @@ This procedure describes a formal release. It does not grant authority to run
 any step. Tags, GitHub Releases, and npm publication each require explicit user
 authorization.
 
+## RC.6 persistent binding gate
+
+RC.6 preserves the RC.5 default `EPHEMERAL` lifecycle and adds opt-in
+`PERSISTENT_BOUND` sessions. Before an RC.6 candidate is considered releasable,
+deterministic tests must prove exact UUID selection, canonical project matching,
+replay protection, masked output, atomic local registry writes, SDK resume, and
+preservation of the bound thread. The registry is user-local and must never be
+included in a package, report, manifest, commit, or release artifact.
+
+No title-based conversation selection is permitted. `chatcom_binding_remove`
+removes only the local registry entry and never deletes the Codex conversation.
+Real proof remains separately authorized and must use a reloaded RC.6 MCP instance;
+synthetic persistent tests are not a real WORK proof.
+
 ## RC.5 WORK host bridge
 
 RC.5 adds a real-host protocol without claiming that the local Codex process is
@@ -49,12 +63,12 @@ https://github.com/NoisyBoyFR/ChatCOM/releases/download/v1.0.0-rc.3/ChatCOM-Desk
 The release must remain marked as a pre-release. It is not the stable `v1.0.0`
 release and does not authorize npm publication.
 
-## RC.5 signing gate
+## RC.6 signing gate
 
-RC.5 remains a source candidate until the owner completes the SignPath
+RC.6 remains a source candidate until the owner completes the SignPath
 Foundation open-source application and configures the protected
 `windows-code-signing` environment. Run `.github/workflows/sign-windows.yml`
-manually from `main` with `SIGN_RC5` only after that external approval. The
+manually from `main` with `SIGN_RC6` only after that external approval. The
 workflow produces no tag, GitHub Release, update feed, or npm publication. It
 must report `SIGNED`, pass independent Authenticode subject and timestamp
 checks for the application and Setup, and emit final SHA-256 hashes before a
@@ -94,7 +108,7 @@ After publication, verify the tag, release artifacts, checksums, and main-branch
 CI, then update the durable proof without exposing sensitive runtime content.
 # Auto-update signing gate
 
-The RC.5 updater is implemented locally but remains fail-closed. Windows
+The RC.6 updater is implemented locally but remains fail-closed. Windows
 automatic updates are enabled only for a packaged x64 build whose Setup.exe,
 full Squirrel package, and `RELEASES` manifest have a valid Authenticode
 signature with the externally configured publisher subject and timestamp. The current
@@ -119,7 +133,7 @@ silently downgrades.
 
 The protected manual signing workflow is `.github/workflows/sign-windows.yml`.
 It runs only from `main`, requires the `windows-code-signing` environment and
-the exact `SIGN_RC5` confirmation, submits one request through the official
+the exact `SIGN_RC6` confirmation, submits one request through the official
 SignPath GitHub trusted build action pinned to a full commit SHA, and verifies
 the signed application and final Setup before hash and manifest generation. The
 workflow only uploads temporary input and signed validation artifacts; it has
@@ -129,4 +143,4 @@ The repository owner must complete the identity validation, Public Trust
 certificate profile, federated credential, role assignment, and protected
 environment variables described in [WINDOWS-SIGNING.md](WINDOWS-SIGNING.md).
 Until that external setup exists and the workflow proves a valid publisher and
-timestamp, RC.5 publication remains blocked.
+timestamp, RC.6 publication remains blocked.

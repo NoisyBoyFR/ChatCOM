@@ -41,3 +41,18 @@ tracking its configured `origin` remote.
 - Use `CODEX-CHATCOM-PROMPT.md` as the single durable Visual Studio Code prompt.
 - Require explicit per-mission authorization before future real diagnostics,
   relay executions or Git/GitHub writes.
+
+## RC.6 persistent binding state — 2026-08-22
+
+ChatCOM `1.0.0-rc.6` adds opt-in persistent Codex conversation bindings while
+preserving the default `EPHEMERAL` lifecycle. A validated local binding stores
+only an exact Codex thread reference in the user-data registry; MCP and Desktop
+summaries expose aliases and a masked tail only. Bound exchanges use
+`resumeThread`, preserve the thread during cleanup, and never call
+`deleteThread`; ephemeral exchanges retain the prior delete-and-close behavior.
+
+The RC.6 implementation is on `feature/rc6-persistent-codex-binding` and has
+not used a real MCP or model relay. Deterministic tests, build and typechecks
+are passing. The next authorized work is isolated Windows packaging, complete
+verification, PR/CI and merge. No tag, Release, public update feed, SignPath
+request or npm publication is authorized by this candidate work.

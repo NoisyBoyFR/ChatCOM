@@ -11,7 +11,7 @@
 
 [![Télécharger ChatCOM Desktop](https://img.shields.io/badge/Télécharger-ChatCOM_Desktop_pour_Windows-0078D4?style=for-the-badge&logo=windows11&logoColor=white)](https://github.com/NoisyBoyFR/ChatCOM/releases/download/v1.0.0-rc.3/ChatCOM-Desktop-1.0.0-rc.3-Setup.exe)
 
-**Version candidate du code source :** `1.0.0-rc.5` · Windows x64 · le workflow Artifact Signing protégé est prêt, mais les mises à jour publiques restent désactivées tant que l’identité externe et le profil de certificat ne sont pas configurés
+**Version candidate du code source :** `1.0.0-rc.6` · Windows x64 · le workflow Artifact Signing protégé est prêt, mais les mises à jour publiques restent désactivées tant que l’identité externe et le profil de certificat ne sont pas configurés
 
 ## Qu’est-ce que ChatCOM ?
 
@@ -45,12 +45,13 @@ La route `WORK_HOST` est la seule éligible à une preuve WORK ↔ Codex réelle
 - préférences versionnées et validées, sans mission ni contenu de conversation ;
 - paramètres édités dans un brouillon temporaire : « Sauvegarder » persiste et ferme, tandis que « Annuler » abandonne les changements ;
 - diagnostics bornés sans prompt, réponse, identifiant de thread, secret ni stack trace.
-- l’état Desktop distingue `WORK_HOST`, `CODEX_LOCAL`, `USER`, `REAL_WORK_HOST` et `LOCAL_SIMULATION`.
+- l’état Desktop distingue `WORK_HOST`, `CODEX_LOCAL`, `USER`, `REAL_WORK_HOST` et `LOCAL_SIMULATION` ;
+- RC.6 ajoute le choix explicite entre conversation temporaire et conversation Codex liée ; une liaison reprend un fil par UUID exact et le conserve après le nettoyage. Voir [les liaisons persistantes](PERSISTENT-BINDINGS.md).
 
 ## Télécharger et installer sur Windows
 
 Les liens publics ci-dessous pointent encore vers la dernière RC.3 publiée.
-La RC.5 reste un travail local de validation : elle ne doit pas être publiée
+La RC.6 reste un travail local de validation : elle ne doit pas être publiée
 et les mises à jour automatiques restent fermées tant que les artefacts
 Windows ne sont pas signés. Le canal Stable utilise `autoUpdater` dans le
 processus principal Electron avec la source officielle
@@ -108,7 +109,7 @@ Les informations de build lisibles par machine se trouvent dans [desktop-build-m
 - les canaux IPC et leurs émetteurs sont autorisés et validés explicitement ;
 - les diagnostics exposent uniquement des métadonnées bornées.
 
-Le relais MCP authentifié a réussi une preuve réelle de trois transmissions avec nettoyage confirmé. L’architecture de mise à jour RC.5, l’interface Desktop, ses traductions, ses paramètres, son installateur, le pont WORK_HOST et les garde-fous SignPath sont couverts par la suite de tests déterministes et la CI multiplateforme. La preuve réelle WORK_HOST est enregistrée dans [`.ai/PROOF.md`](.ai/PROOF.md).
+Le relais MCP authentifié a réussi une preuve réelle de trois transmissions avec nettoyage confirmé. L’architecture de mise à jour RC.6, l’interface Desktop, ses traductions, ses paramètres, son installateur, le pont WORK_HOST et les garde-fous SignPath sont couverts par la suite de tests déterministes et la CI multiplateforme. La preuve réelle WORK_HOST est enregistrée dans [`.ai/PROOF.md`](.ai/PROOF.md).
 
 ## Démarrage rapide pour les développeurs
 
@@ -127,7 +128,7 @@ npm run desktop:make
 Installateur attendu :
 
 ```text
-out-desktop/make/squirrel.windows/x64/ChatCOM-Desktop-1.0.0-rc.5-Setup.exe
+out-desktop/make/squirrel.windows/x64/ChatCOM-Desktop-1.0.0-rc.6-Setup.exe
 ```
 
 `npm run verify` exécute le build, les vérifications TypeScript du noyau et de Desktop, les tests déterministes, la validation de configuration, l’audit des dépendances de production et le contrôle du paquet npm. Les commandes de diagnostic peuvent contacter un runtime Codex réel et nécessitent une autorisation explicite.
@@ -160,11 +161,12 @@ node .\dist\portable-cli.js run --config .\relay.config.example.json --timeout-m
 
 ## Pont MCP
 
-ChatCOM expose quatre outils MCP STDIO :
+ChatCOM expose les outils du pont RC.6 ainsi que des opérations locales bornées de gestion des liaisons :
 
 - `chatcom_validate_config` valide la configuration sans démarrer Codex ;
 - `chatcom_work_open` reçoit une `MISSION` `WORK_HOST` validée, obtient un rapport Codex en lecture seule et laisse l’échange ouvert ;
-- `chatcom_work_complete` reçoit exactement un `NEXT_PROMPT` `WORK_HOST`, supprime le thread Codex unique, ferme le client et confirme le nettoyage ;
+- `chatcom_work_complete` reçoit exactement un `NEXT_PROMPT` `WORK_HOST`, supprime un fil temporaire ou conserve un fil lié, ferme le client et confirme le nettoyage ;
+- `chatcom_binding_create`, `chatcom_binding_validate`, `chatcom_binding_list`, `chatcom_binding_disable` et `chatcom_binding_remove` gèrent les liaisons locales exactes sans lire l’historique de conversation ;
 - `chatcom_run_relay` reste un outil de compatibilité nommé `LOCAL_SIMULATION` et ne constitue pas une preuve WORK réelle.
 
 Le protocole réel est le suivant :
@@ -175,6 +177,8 @@ Le protocole réel est le suivant :
 
 La réussite finale exige exactement trois transmissions et `cleanup=CONFIRMED`. ChatCOM ne lit jamais les cookies, jetons, clés API ou profils navigateur de WORK. Sans véritable hôte WORK, le verdict est `READY_FOR_WORK_PROOF`, jamais une preuve réelle simulée.
 
+Le mode par défaut reste `EPHEMERAL`. Un `binding_id` active `PERSISTENT_BOUND` uniquement après validation de l’UUID exact et du chemin canonique du projet. Les titres ne sélectionnent jamais les conversations et les identifiants complets de thread ne figurent jamais dans les sorties bornées. Voir [PERSISTENT-BINDINGS.md](PERSISTENT-BINDINGS.md).
+
 Compilez ChatCOM, copiez [`.codex/config.toml.example`](.codex/config.toml.example) dans une configuration Codex de confiance, remplacez les chemins fictifs par des chemins absolus, puis redémarrez l’hôte MCP. Conservez le relais en mode d’approbation `prompt`.
 
 ## Ressources du projet
@@ -184,6 +188,7 @@ Compilez ChatCOM, copiez [`.codex/config.toml.example`](.codex/config.toml.examp
 - [Procédure de publication](RELEASING.md)
 - [Preuves opérationnelles](.ai/PROOF.md)
 - [Prompt Codex durable](CODEX-CHATCOM-PROMPT.md)
+- [Liaisons Codex persistantes](PERSISTENT-BINDINGS.md)
 - [Licence](LICENSE)
 - [Avis de confidentialite](PRIVACY.md)
 - [Politique de securite](SECURITY.md)
@@ -192,9 +197,9 @@ Compilez ChatCOM, copiez [`.codex/config.toml.example`](.codex/config.toml.examp
 - [Dossier de candidature SignPath](SIGNPATH-APPLICATION.md)
 - [Préversion RC.3](https://github.com/NoisyBoyFR/ChatCOM/releases/tag/v1.0.0-rc.3)
 
-## Gate de publication RC.5
+## Gate de publication RC.6
 
-La RC.5 est une candidate source, pas une release publique. La publication
+La RC.6 est une candidate source, pas une release publique. La publication
 Windows reste bloquee tant que le proprietaire n'a pas termine la candidature
 SignPath Foundation Open Source Code Signing et que le workflow protege n'a
 pas produit un manifeste `SIGNED`. Le workflow est manuel, limite a `main`, ne

@@ -4,6 +4,24 @@ All notable ChatCOM changes are recorded in this file. Dates use the ISO `YYYY-M
 
 ## [Unreleased]
 
+- RC.6: added explicit `EPHEMERAL` and `PERSISTENT_BOUND` Codex conversation lifecycles with exact UUID binding and project validation.
+- RC.6: added an atomic local binding registry, masked aliases, bounded MCP binding operations, and Desktop binding management in French, English, Simplified Chinese, and Russian.
+- RC.6: added SDK `resumeThread()` support that preserves bound Codex sessions and never calls `deleteThread()` for persistent cleanup; RC.5 ephemeral deletion remains unchanged.
+
+## [1.0.0-rc.6] - 2026-08-22
+
+### Added
+
+- Exact local Codex binding registry for continuing an existing conversation without title-based selection.
+- Optional `binding_id` support on the real `WORK_HOST` bridge and bounded local binding-management MCP tools.
+- Persistent-session tests for resume, project mismatch, replay protection, masked identifiers, serialization, and preserved cleanup.
+
+### Security
+
+- Binding data stays in local ChatCOM user data and is written atomically.
+- Full thread IDs are excluded from UI results, diagnostics, reports, manifests, and GitHub.
+- Persistent cleanup closes transport only; removing a binding never deletes the Codex conversation.
+
 - RC.5 hardening: specialized message schemas now use SDK-compatible singleton `enum` constraints instead of `const`; SDK REPORT diagnostics are preserved through the MCP boundary with allowlisted fields, and structured MCP results are checked for JSON serializability.
 - RC.5: added the two-call `WORK_HOST` MCP bridge (`chatcom_work_open` and `chatcom_work_complete`) with one Codex thread, in-memory exchange state, route/replay protection, inactivity cleanup, and bounded host/authentication labels.
 - RC.5: kept `chatcom_run_relay` explicitly classified as `LOCAL_SIMULATION`; no synthetic local relay is eligible for a real WORK proof.

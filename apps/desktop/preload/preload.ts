@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from "electron";
-import { DESKTOP_IPC_CHANNELS, type DesktopApi, type DesktopConfigureInput, type DesktopStateResponse } from "../shared/ipc.js";
+import { DESKTOP_IPC_CHANNELS, type DesktopApi, type DesktopConfigureInput, type DesktopStateResponse, type DesktopBindingCreateInput } from "../shared/ipc.js";
 import type { DesktopPreferences } from "../../../src/desktop/preferences.js";
 import type { UpdateSnapshot } from "../../../src/desktop/updater.js";
 import type { ConversationEvent, ConversationSnapshot } from "../../../src/conversation/orchestrator.js";
@@ -32,6 +32,11 @@ const api: DesktopApi = Object.freeze({
     ipcRenderer.on(DESKTOP_IPC_CHANNELS.event, wrapped);
     return () => ipcRenderer.removeListener(DESKTOP_IPC_CHANNELS.event, wrapped);
   },
+  listBindings: () => ipcRenderer.invoke(DESKTOP_IPC_CHANNELS.listBindings),
+  createBinding: (input: DesktopBindingCreateInput) => ipcRenderer.invoke(DESKTOP_IPC_CHANNELS.createBinding, input),
+  validateBinding: (bindingId: string, projectRoot?: string) => ipcRenderer.invoke(DESKTOP_IPC_CHANNELS.validateBinding, bindingId, projectRoot),
+  disableBinding: (bindingId: string) => ipcRenderer.invoke(DESKTOP_IPC_CHANNELS.disableBinding, bindingId),
+  removeBinding: (bindingId: string) => ipcRenderer.invoke(DESKTOP_IPC_CHANNELS.removeBinding, bindingId),
 });
 
 contextBridge.exposeInMainWorld("chatcomDesktop", api);

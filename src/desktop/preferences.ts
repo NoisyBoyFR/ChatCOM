@@ -28,7 +28,7 @@ export function defaultUpdateChannel(version: string): UpdateChannel { return ve
 function boundedText(value: unknown, max = 512): string | undefined { return typeof value === "string" && value.trim().length > 0 && value.length <= max ? value : undefined; }
 function boundedCycles(value: unknown): number { return typeof value === "number" && Number.isSafeInteger(value) && value >= 1 && value <= 20 ? value : DEFAULT_PREFERENCES.maxCycles; }
 
-export function parsePreferences(raw: unknown, systemLocale?: string, appVersion = "1.0.0-rc.5"): DesktopPreferences {
+export function parsePreferences(raw: unknown, systemLocale?: string, appVersion = "1.0.0-rc.6"): DesktopPreferences {
   const value = typeof raw === "object" && raw !== null && !Array.isArray(raw) ? raw as Record<string, unknown> : {};
   const language = isSupportedLocale(value.language) ? value.language : detectLocale(systemLocale);
   const result: DesktopPreferences = {
@@ -49,5 +49,5 @@ export function parsePreferences(raw: unknown, systemLocale?: string, appVersion
   return result;
 }
 
-export function migratePreferences(raw: unknown, systemLocale?: string, appVersion = "1.0.0-rc.5"): DesktopPreferences { return parsePreferences(raw, systemLocale, appVersion); }
+export function migratePreferences(raw: unknown, systemLocale?: string, appVersion = "1.0.0-rc.6"): DesktopPreferences { return parsePreferences(raw, systemLocale, appVersion); }
 export function preferencesForStorage(preferences: DesktopPreferences): DesktopPreferences { return parsePreferences(preferences, preferences.language); }

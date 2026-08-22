@@ -1,10 +1,10 @@
 {
   "project": "ChatCOM",
   "schema_version": "1.0",
-  "status": "V1_RC_PROVEN",
+  "status": "RC6_RELEASE_READINESS",
   "source": "FitMyLife portable Work-Codex relay",
-  "current_scope": "ChatCOM 1.0.0-rc.1 release candidate with a strict shared TypeScript and MCP contract, bounded end-to-end cancellation, validated three-message routing, multi-platform CI, authenticated real MCP proof and confirmed cleanup",
+  "current_scope": "ChatCOM 1.0.0-rc.6 release-readiness candidate with opt-in persistent Codex thread bindings, exact resume semantics, bounded MCP lifecycle, read-only security and deterministic validation",
   "real_w1_operational": true,
   "real_mcp_bridge_operational": true,
-  "next_step": "Perform the post-merge read-only inspection, then request separate authorization for any formal v1.0 tag, GitHub Release or npm publication"
+  "next_step": "Complete the RC.6 validation, PR and CI merge; keep real bound-work proof, tag, GitHub Release, public update feed and npm publication separately authorized"
 }

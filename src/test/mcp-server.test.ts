@@ -239,7 +239,7 @@ test("rejects a relay session mismatch without exposing envelope content", async
   try {
     const result = await client.callTool({ name: CHATCOM_RELAY_TOOL, arguments: { config_path: "relay.json" } });
     assert.equal(result.isError, true);
-    assert.equal(textContent(result), "CHATCOM_MCP kind=FAILURE code=RELAY_SESSION_MISMATCH relay_stage=NONE completed_transmissions=0 cleanup=CONFIRMED");
+    assert.equal(textContent(result), "CHATCOM_MCP kind=FAILURE code=RELAY_SESSION_MISMATCH relay_stage=NONE completed_transmissions=0 cleanup=CONFIRMED sdk_stage=UNKNOWN terminal=UNKNOWN thread_started=UNKNOWN turn_started=UNKNOWN stream_closed=UNKNOWN failure_category=UNKNOWN");
     assert.equal(JSON.stringify(result).includes("LEAK_SENTINEL"), false);
   } finally {
     await client.close();
@@ -256,7 +256,7 @@ test("bounds tool failures without exposing arbitrary errors", async () => {
   try {
     const unknown = await client.callTool({ name: CHATCOM_VALIDATE_TOOL, arguments: { config_path: "secret.json" } });
     assert.equal(unknown.isError, true);
-    assert.equal(textContent(unknown), "CHATCOM_MCP kind=FAILURE code=MCP_INTERNAL_ERROR relay_stage=NONE completed_transmissions=0 cleanup=NOT_CONFIRMED");
+    assert.equal(textContent(unknown), "CHATCOM_MCP kind=FAILURE code=MCP_INTERNAL_ERROR relay_stage=NONE completed_transmissions=0 cleanup=NOT_CONFIRMED sdk_stage=UNKNOWN terminal=UNKNOWN thread_started=UNKNOWN turn_started=UNKNOWN stream_closed=UNKNOWN failure_category=UNKNOWN");
     assert.equal(JSON.stringify(unknown).includes("LEAK_SENTINEL"), false);
   } finally {
     await client.close();
@@ -270,7 +270,7 @@ test("bounds tool failures without exposing arbitrary errors", async () => {
   const bounded = await connectedClient(boundedDependencies);
   try {
     const result = await bounded.client.callTool({ name: CHATCOM_VALIDATE_TOOL, arguments: { config_path: "missing.json" } });
-    assert.equal(textContent(result), "CHATCOM_MCP kind=FAILURE code=CONFIG_READ_FAILED relay_stage=NONE completed_transmissions=0 cleanup=NOT_CONFIRMED");
+    assert.equal(textContent(result), "CHATCOM_MCP kind=FAILURE code=CONFIG_READ_FAILED relay_stage=NONE completed_transmissions=0 cleanup=NOT_CONFIRMED sdk_stage=UNKNOWN terminal=UNKNOWN thread_started=UNKNOWN turn_started=UNKNOWN stream_closed=UNKNOWN failure_category=UNKNOWN");
   } finally {
     await bounded.client.close();
     await bounded.server.close();
@@ -281,16 +281,25 @@ test("returns a bounded relay failure diagnostic with cleanup status", async () 
   const dependencies: ChatComMcpDependencies = {
     loadConfig: async () => config(),
     runRelay: async () => {
-      throw new RelayFailure("UNEXPECTED_MESSAGE_ROUTE", ["codex-thread"], ["work-thread", "codex-thread"], ["work-thread"], ["THREAD_DELETE_UNCONFIRMED"], undefined, "CODEX_REPORT", 1);
+      throw new RelayFailure("SDK_TURN_FAILED", ["codex-thread"], ["work-thread", "codex-thread"], ["work-thread"], ["THREAD_DELETE_UNCONFIRMED"], {
+        sdkStage: "TERMINAL_FAILED",
+        sdkLastStage: "TERMINAL_FAILED",
+        terminal: "FAILED",
+        threadStarted: true,
+        turnStarted: true,
+        streamClosed: true,
+        failureCategory: "OUTPUT_SCHEMA_REJECTED",
+      }, "CODEX_REPORT", 1);
     },
   };
   const { server, client } = await connectedClient(dependencies);
   try {
     const result = await client.callTool({ name: CHATCOM_RELAY_TOOL, arguments: { config_path: "relay.json" } });
     assert.equal(result.isError, true);
-    assert.equal(textContent(result), "CHATCOM_MCP kind=FAILURE code=UNEXPECTED_MESSAGE_ROUTE relay_stage=CODEX_REPORT completed_transmissions=1 cleanup=NOT_CONFIRMED");
+    assert.equal(textContent(result), "CHATCOM_MCP kind=FAILURE code=SDK_TURN_FAILED relay_stage=CODEX_REPORT completed_transmissions=1 cleanup=NOT_CONFIRMED sdk_stage=TERMINAL_FAILED terminal=FAILED thread_started=true turn_started=true stream_closed=true failure_category=OUTPUT_SCHEMA_REJECTED");
     assert.equal(JSON.stringify(result).includes("LEAK_SENTINEL"), false);
     assert.equal(JSON.stringify(result).includes("codex-thread"), false);
+    assert.doesNotThrow(() => JSON.stringify(result));
   } finally {
     await client.close();
     await server.close();

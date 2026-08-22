@@ -123,3 +123,16 @@ The current Codex session does not expose the new `chatcom_work_open` and
 `chatcom_work_complete` tools as a genuine WORK host. No false relay was
 started. The candidate status is `READY_FOR_WORK_PROOF`; a genuine MCP host
 must perform the single authorized real proof after MCP reload.
+
+## RC.5 CODEX_REPORT pre-proof correction — 2026-08-22
+
+The first genuine WORK_HOST preflight reached ChatCOM and stopped during the
+single CODEX_REPORT turn with `SDK_TURN_FAILED`; one transmission completed and
+cleanup was confirmed. No new real relay is claimed for this correction.
+
+The deterministic correction replaces route `const` constraints with
+SDK-compatible singleton `enum` constraints, preserves the allowlisted SDK
+diagnostic through `WorkHostBridge`, and checks MCP success results for JSON
+serializability. Synthetic tests cover the REPORT route, SDK failure metadata,
+bounded MCP output, cleanup priority, cancellation, timeout, late streams,
+replay, and the no-second-mission invariant.

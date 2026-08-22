@@ -27,11 +27,13 @@ class FakeClient implements CodexSdkRelayClient {
   readonly deletes: string[] = [];
   closeCalls = 0;
   deleteError = false;
+  runError: AppServerClientError | undefined;
 
   async initialize(): Promise<void> {}
   async startThread(): Promise<string> { this.starts.push("codex-thread"); return "internal-thread-id"; }
   async runTurn(threadId: string, _prompt: string, schema?: unknown, signal?: AbortSignal): Promise<string> {
     this.turns.push({ threadId, schema, signal });
+    if (this.runError !== undefined) throw this.runError;
     return JSON.stringify(createMessageForTests({ session_id: sessionId, message_id: reportId, correlation_id: missionId, sequence: 2, sender: "CODEX_LOCAL", recipient: "WORK_HOST", type: "REPORT", phase: config.phase, point: config.point, content: "Bounded technical report.", user_action_needed: false }));
   }
   async deleteThread(threadId: string): Promise<void> { if (this.deleteError) throw new AppServerClientError("THREAD_DELETE_UNCONFIRMED"); this.deletes.push(threadId); }
@@ -53,9 +55,10 @@ test("WORK_HOST exchange returns REPORT, then completes exactly three transmissi
   assert.equal(opened.cleanup, "PENDING");
   assert.equal(opened.report.type, "REPORT");
   assert.equal(client.turns.length, 1);
-  assert.equal(client.turns[0].schema.properties.sender.const, "CODEX_LOCAL");
-  assert.equal(client.turns[0].schema.properties.recipient.const, "WORK_HOST");
-  assert.equal(client.turns[0].schema.properties.type.const, "REPORT");
+  assert.deepEqual(client.turns[0].schema.properties.sender.enum, ["CODEX_LOCAL"]);
+  assert.deepEqual(client.turns[0].schema.properties.recipient.enum, ["WORK_HOST"]);
+  assert.deepEqual(client.turns[0].schema.properties.type.enum, ["REPORT"]);
+  assert.equal(JSON.stringify(client.turns[0].schema).includes("\"const\""), false);
   const completed = await bridge.complete(sessionId, nextPrompt());
   assert.deepEqual({ transmissions: completed.transmissions, cleanup: completed.cleanup }, { transmissions: 3, cleanup: "CONFIRMED" });
   assert.deepEqual(client.deletes, ["internal-thread-id"]);
@@ -92,6 +95,37 @@ test("primary cleanup failure remains bounded and cleanup is not confirmed", asy
   const bridge = bridgeWith(client);
   await bridge.open(config, mission(), 10_000, 10_000);
   await assert.rejects(bridge.complete(sessionId, nextPrompt()), (error) => error instanceof RelayFailure && error.code === "CLEANUP_FAILED" && error.cleanupErrors.includes("THREAD_DELETE_UNCONFIRMED"));
+});
+
+test("preserves the bounded SDK REPORT diagnostic while cleanup remains primary only when it fails", async () => {
+  const client = new FakeClient();
+  client.runError = new AppServerClientError("SDK_TURN_FAILED", {
+    sdkStage: "TERMINAL_FAILED",
+    sdkLastStage: "TERMINAL_FAILED",
+    terminal: "FAILED",
+    threadStarted: true,
+    turnStarted: true,
+    streamClosed: true,
+    failureCategory: "OUTPUT_SCHEMA_REJECTED",
+  });
+  await assert.rejects(bridgeWith(client).open(config, mission(), 10_000, 10_000), (error) => {
+    assert.ok(error instanceof RelayFailure);
+    assert.equal(error.code, "SDK_TURN_FAILED");
+    assert.equal(error.relayStage, "CODEX_REPORT");
+    assert.equal(error.completedTransmissions, 1);
+    assert.deepEqual(error.primaryDiagnostic, {
+      sdkStage: "TERMINAL_FAILED",
+      sdkLastStage: "TERMINAL_FAILED",
+      terminal: "FAILED",
+      threadStarted: true,
+      turnStarted: true,
+      streamClosed: true,
+      failureCategory: "OUTPUT_SCHEMA_REJECTED",
+    });
+    return true;
+  });
+  assert.deepEqual(client.deletes, ["internal-thread-id"]);
+  assert.equal(client.closeCalls, 1);
 });
 
 test("cancelled WORK_HOST opening never creates a Codex thread", async () => {

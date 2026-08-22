@@ -104,11 +104,13 @@ function reportPrompt(mission: MessageEnvelope): string {
   return `Review the following validated read-only mission from the external WORK host. Do not modify files, run a second mission, or invent authorization. Return one JSON REPORT envelope only. Mission: ${JSON.stringify(mission)}`;
 }
 
-async function cleanupClient(client: CodexSdkRelayClient, threadId: string): Promise<{ failures: string[]; errors: string[] }> {
+async function cleanupClient(client: CodexSdkRelayClient, threadId?: string): Promise<{ failures: string[]; errors: string[] }> {
   const failures: string[] = [];
   const errors: string[] = [];
-  try { await client.deleteThread(threadId); }
-  catch (error) { failures.push("CODEX_THREAD"); errors.push(errorCode(error, "THREAD_DELETE_FAILED")); }
+  if (threadId !== undefined) {
+    try { await client.deleteThread(threadId); }
+    catch (error) { failures.push("CODEX_THREAD"); errors.push(errorCode(error, "THREAD_DELETE_FAILED")); }
+  }
   try {
     const closed = await client.close();
     if (!closed.exited || closed.forced) errors.push("CLIENT_CLOSE_UNCONFIRMED");
@@ -159,8 +161,15 @@ export class WorkHostBridge {
       primaryError = error;
     }
     if (client !== undefined) {
-      const cleanup = await cleanupClient(client, threadId ?? "unstarted");
-      const failure = primaryError instanceof RelayFailure ? primaryError : new RelayFailure(errorCode(primaryError, "WORK_HOST_REPORT_FAILED"), [], [], [], [], undefined, "CODEX_REPORT", 1);
+      const cleanup = await cleanupClient(client, threadId);
+      const diagnostic = primaryError instanceof RelayFailure
+        ? primaryError.primaryDiagnostic
+        : primaryError instanceof AppServerClientError
+          ? primaryError.diagnostic
+          : undefined;
+      const failure = primaryError instanceof RelayFailure
+        ? primaryError
+        : new RelayFailure(errorCode(primaryError, "WORK_HOST_REPORT_FAILED"), [], [], [], [], diagnostic, "CODEX_REPORT", 1);
       if (cleanup.failures.length > 0 || cleanup.errors.length > 0) throw new RelayFailure(failure.code, cleanup.failures, [], [], cleanup.errors, failure.primaryDiagnostic, failure.relayStage, failure.completedTransmissions);
       throw failure;
     }

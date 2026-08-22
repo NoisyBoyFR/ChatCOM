@@ -4,6 +4,7 @@ import { createRequire } from "node:module";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import * as z from "zod/v4";
+import { AppServerClientError } from "./app-server-client.js";
 import { RelayFailure } from "./local-relay.js";
 import { MAX_CONTENT_BYTES, MAX_ROUTE_BYTES, DELIVERY_STATUSES, MESSAGE_DATE_PATTERN, MESSAGE_ROLES, MESSAGE_TYPES, MESSAGE_UUID_PATTERN, validateRelayMessages, type MessageEnvelope } from "./message-contract.js";
 import { loadRelayConfig, RelayConfigError, type PortableRelayConfig } from "./relay-config.js";
@@ -139,7 +140,7 @@ function completeStructured(result: WorkHostCompleteResult) {
 }
 
 function safeErrorCode(error: unknown): string {
-  const candidate = error instanceof RelayConfigError || error instanceof RelayFailure ? error.code : "MCP_INTERNAL_ERROR";
+  const candidate = error instanceof RelayConfigError || error instanceof RelayFailure || error instanceof AppServerClientError ? error.code : "MCP_INTERNAL_ERROR";
   return /^[A-Z][A-Z0-9_]{0,63}$/u.test(candidate) ? candidate : "MCP_INTERNAL_ERROR";
 }
 
@@ -157,12 +158,42 @@ function safeCleanupStatus(error: unknown): "CONFIRMED" | "NOT_CONFIRMED" {
   return error.cleanupFailures.length === 0 && error.cleanupErrors.length === 0 ? "CONFIRMED" : "NOT_CONFIRMED";
 }
 
+function safeDiagnostic(error: unknown): {
+  sdkStage: string;
+  terminal: string;
+  threadStarted: boolean | "UNKNOWN";
+  turnStarted: boolean | "UNKNOWN";
+  streamClosed: boolean | "UNKNOWN";
+  failureCategory: string;
+} {
+  const diagnostic = error instanceof RelayFailure ? error.primaryDiagnostic : error instanceof AppServerClientError ? error.diagnostic : undefined;
+  return {
+    sdkStage: diagnostic?.sdkStage ?? "UNKNOWN",
+    terminal: diagnostic?.terminal ?? "UNKNOWN",
+    threadStarted: diagnostic?.threadStarted ?? "UNKNOWN",
+    turnStarted: diagnostic?.turnStarted ?? "UNKNOWN",
+    streamClosed: diagnostic?.streamClosed ?? "UNKNOWN",
+    failureCategory: diagnostic?.failureCategory ?? "UNKNOWN",
+  };
+}
+
+function assertMcpSerializable(value: unknown): void {
+  try {
+    const serialized = JSON.stringify(value);
+    if (serialized === undefined) throw new Error("undefined");
+    JSON.parse(serialized);
+  } catch {
+    throw new RelayFailure("MCP_RESULT_NOT_SERIALIZABLE");
+  }
+}
+
 function toolFailure(error: unknown) {
+  const diagnostic = safeDiagnostic(error);
   return {
     isError: true,
     content: [{
       type: "text" as const,
-      text: `CHATCOM_MCP kind=FAILURE code=${safeErrorCode(error)} relay_stage=${safeRelayStage(error)} completed_transmissions=${safeCompletedTransmissions(error)} cleanup=${safeCleanupStatus(error)}`,
+      text: `CHATCOM_MCP kind=FAILURE code=${safeErrorCode(error)} relay_stage=${safeRelayStage(error)} completed_transmissions=${safeCompletedTransmissions(error)} cleanup=${safeCleanupStatus(error)} sdk_stage=${diagnostic.sdkStage} terminal=${diagnostic.terminal} thread_started=${diagnostic.threadStarted} turn_started=${diagnostic.turnStarted} stream_closed=${diagnostic.streamClosed} failure_category=${diagnostic.failureCategory}`,
     }],
   };
 }
@@ -192,7 +223,9 @@ export function createChatComMcpServer(dependencies: ChatComMcpDependencies = DE
       try {
         const config = await dependencies.loadConfig(resolve(config_path));
         const result = await workHostBridge.open(config, mission as MessageEnvelope, timeout_ms, idle_timeout_ms, extra.signal);
-        return { structuredContent: openStructured(result), content: [{ type: "text" as const, text: "CHATCOM_WORK_HOST kind=REPORT_READY transmissions=2 cleanup=PENDING mode=REAL_WORK_HOST" }] };
+        const structuredContent = openStructured(result);
+        assertMcpSerializable(structuredContent);
+        return { structuredContent, content: [{ type: "text" as const, text: "CHATCOM_WORK_HOST kind=REPORT_READY transmissions=2 cleanup=PENDING mode=REAL_WORK_HOST" }] };
       } catch (error) { return toolFailure(error); }
     },
   );
@@ -212,7 +245,9 @@ export function createChatComMcpServer(dependencies: ChatComMcpDependencies = DE
     async ({ session_id, next_prompt }, extra) => {
       try {
         const result = await workHostBridge.complete(session_id, next_prompt as MessageEnvelope, extra.signal);
-        return { structuredContent: completeStructured(result), content: [{ type: "text" as const, text: "CHATCOM_WORK_HOST kind=SUCCESS transmissions=3 cleanup=CONFIRMED mode=REAL_WORK_HOST" }] };
+        const structuredContent = completeStructured(result);
+        assertMcpSerializable(structuredContent);
+        return { structuredContent, content: [{ type: "text" as const, text: "CHATCOM_WORK_HOST kind=SUCCESS transmissions=3 cleanup=CONFIRMED mode=REAL_WORK_HOST" }] };
       } catch (error) { return toolFailure(error); }
     },
   );
@@ -236,6 +271,7 @@ export function createChatComMcpServer(dependencies: ChatComMcpDependencies = DE
           phase: config.phase,
           point: config.point,
         };
+        assertMcpSerializable(structuredContent);
         return {
           structuredContent,
           content: [{ type: "text" as const, text: `CHATCOM_CONFIG kind=VALID version=${config.version}` }],
@@ -272,6 +308,7 @@ export function createChatComMcpServer(dependencies: ChatComMcpDependencies = DE
           cleanup: result.cleanup,
           messages: [...messages],
         };
+        assertMcpSerializable(structuredContent);
         return {
           structuredContent,
           content: [{ type: "text" as const, text: "CHATCOM_RELAY kind=SUCCESS transmissions=3 cleanup=CONFIRMED" }],

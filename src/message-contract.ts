@@ -254,25 +254,26 @@ export const MESSAGE_OUTPUT_SCHEMA = {
 } as const;
 
 export function createMessageOutputSchema(expectation: MessageRouteExpectation) {
+  const singleton = <T extends string | number | boolean>(value: T) => ({ enum: [value] as readonly [T] });
   return {
     type: "object",
     additionalProperties: false,
     required: [...MESSAGE_KEYS],
     properties: {
-      version: { const: MESSAGE_VERSION },
-      session_id: { const: expectation.sessionId },
+      version: singleton(MESSAGE_VERSION),
+      session_id: singleton(expectation.sessionId),
       message_id: { type: "string", pattern: MESSAGE_UUID_PATTERN.source },
-      correlation_id: { const: expectation.correlationId },
-      sequence: { const: expectation.sequence },
-      sender: { const: expectation.sender },
-      recipient: { const: expectation.recipient },
-      type: { const: expectation.type },
-      phase: { const: expectation.phase },
-      point: { const: expectation.point },
+      correlation_id: singleton(expectation.correlationId),
+      sequence: singleton(expectation.sequence),
+      sender: singleton(expectation.sender),
+      recipient: singleton(expectation.recipient),
+      type: singleton(expectation.type),
+      phase: singleton(expectation.phase),
+      point: singleton(expectation.point),
       content: { type: "string", minLength: 1, description: "UTF-8 byte length is bounded by MAX_CONTENT_BYTES at runtime." },
       created_at: { type: "string", pattern: MESSAGE_DATE_PATTERN.source },
-      delivery_status: { const: "CREATED" },
-      user_action_needed: { const: expectation.userActionNeeded ?? false },
+      delivery_status: singleton("CREATED"),
+      user_action_needed: singleton(expectation.userActionNeeded ?? false),
     },
   } as const;
 }

@@ -70,7 +70,7 @@ test("settings session covers display modes, motion and auto-scroll without appl
 
 test("saved settings survive a serialized preference restart", () => {
   assert.equal(parsePreferences(undefined, "fr-FR", "1.0.0").updateChannel, "stable");
-  assert.equal(parsePreferences(undefined, "fr-FR", "1.0.0-rc.4").updateChannel, "preview");
+  assert.equal(parsePreferences(undefined, "fr-FR", "1.0.0-rc.5").updateChannel, "preview");
   const saved = preferencesForStorage({ ...DEFAULT_PREFERENCES, language: "ru-RU", theme: "dark", windowMode: "maximized", textSize: "large", reduceMotion: true, autoScroll: false });
   const restored = parsePreferences(JSON.parse(JSON.stringify(saved)), "fr-FR");
   assert.equal(restored.language, "ru-RU");

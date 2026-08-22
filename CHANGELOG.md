@@ -18,6 +18,22 @@ All notable ChatCOM changes are recorded in this file. Dates use the ISO `YYYY-M
 - Added MIT licensing, privacy, security, third-party notices, a code-signing policy, and a SignPath owner application dossier.
 - Added fail-closed Authenticode verification, independent publisher/timestamp checks, post-signing hashes, and a `SIGNED` manifest; no client secret or private certificate material is stored in the repository.
 
+## [1.0.0-rc.5] - 2026-08-22
+
+### Added
+
+- Real `WORK_HOST` ↔ `CODEX_LOCAL` MCP bridge proof with `MISSION → REPORT → NEXT_PROMPT`, exactly three transmissions, read-only execution, and confirmed cleanup.
+- RC.5 release-readiness flow for versioned Windows Preview artifacts, hashes, manifest validation, and a fail-closed `SIGNED` gate.
+
+### Changed
+
+- Migrated the protected SignPath workflow to RC.5 with version-derived artifact names, manual `main` execution, pinned actions, and read-only repository permissions.
+- Authenticode validation now uses the exact external publisher subject configured by SignPath; the product name `ChatCOM` is not treated as a certificate subject.
+
+### Distribution
+
+- No tag, GitHub Release, GitHub Pages deployment, unsigned public update, or npm publication was created for RC.5.
+
 ## [1.0.0-rc.3] - 2026-08-21
 
 ### Added

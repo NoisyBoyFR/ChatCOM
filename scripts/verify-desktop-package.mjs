@@ -14,6 +14,7 @@ const publisherSubject = valueFor("--publisher-subject");
 const expectedRuntimeVersion = "0.149.0";
 const optionsWithValues = new Set(["--setup", "--app", "--manifest", "--sums", "--publisher-subject"]);
 const flags = new Set(["--expect-signed"]);
+const publisherConfigured = typeof publisherSubject === "string" && publisherSubject.trim().length > 0 && !["UNKNOWN", "UNAVAILABLE"].includes(publisherSubject.trim());
 let argumentsValid = true;
 for (let index = 0; index < args.length; index += 1) {
   const argument = args[index];
@@ -22,7 +23,7 @@ for (let index = 0; index < args.length; index += 1) {
   index += 1;
 }
 
-if (!argumentsValid || !setupPath || !appPath || Boolean(manifestPath) !== Boolean(sumsPath) || expectSigned !== Boolean(publisherSubject)) {
+if (!argumentsValid || !setupPath || !appPath || Boolean(manifestPath) !== Boolean(sumsPath) || expectSigned !== publisherConfigured) {
   console.log("CHATCOM_DESKTOP_PACKAGE kind=FAILURE code=USAGE_INVALID");
   process.exitCode = 1;
 } else {

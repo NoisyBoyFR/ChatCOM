@@ -15,7 +15,7 @@
 
 ## RC.5 publication and signing gate
 
-RC.4 is a source candidate, not a public release. Windows publication is
+RC.5 is a source candidate, not a public release. Windows publication is
 blocked until the owner completes the SignPath Foundation Open Source Code
 Signing application and the protected workflow produces a `SIGNED` manifest.
 The workflow is manual, runs only from `main`, cannot create tags or Releases,
@@ -64,7 +64,7 @@ The `WORK_HOST` route is the only route eligible for a real WORK ↔ Codex proof
 
 ## Download and install on Windows
 
-The public download links below still point to the last published RC.3. RC.4 is
+The public download links below still point to the last published RC.3. RC.5 is
 local validation work only: it must not be published or used for automatic
 updates while its Windows artifacts are unsigned. Stable uses Electron's
 main-process `autoUpdater` with the official public
@@ -88,6 +88,11 @@ GitHub owner setup are documented in [WINDOWS-SIGNING.md](WINDOWS-SIGNING.md).
 It creates only a temporary signed validation artifact and cannot publish a
 tag or Release.
 
+The product name is `ChatCOM`; the Authenticode publisher is the exact subject
+assigned later by SignPath and is never guessed or hard-coded. The local
+Preview validator refuses activation unless the manifest is `SIGNED`,
+timestamped, hashed, and carries that configured subject.
+
 The complete machine-readable build information is available in [desktop-build-manifest.json](https://github.com/NoisyBoyFR/ChatCOM/releases/download/v1.0.0-rc.3/desktop-build-manifest.json).
 
 ## Requirements
@@ -108,7 +113,7 @@ The complete machine-readable build information is available in [desktop-build-m
 - IPC channels and senders are allowlisted and validated;
 - diagnostics expose bounded status metadata only.
 
-The authenticated MCP relay has completed a real three-transmission proof with confirmed cleanup. The RC.4 updater architecture, RC.3 Desktop interface, localization, settings, installer, and SignPath guards are covered by 126 deterministic tests and multi-platform CI; a separate real GUI relay proof has not yet been claimed. See [`.ai/PROOF.md`](.ai/PROOF.md).
+The authenticated MCP relay has completed a real three-transmission proof with confirmed cleanup. The RC.5 updater architecture, Desktop interface, localization, settings, installer, SignPath guards, and WORK_HOST bridge are covered by the deterministic test suite and multi-platform CI. The real WORK_HOST proof is recorded in [`.ai/PROOF.md`](.ai/PROOF.md).
 
 ## Developer quick start
 
@@ -127,7 +132,7 @@ npm run desktop:make
 The expected installer is:
 
 ```text
-out-desktop/make/squirrel.windows/x64/ChatCOM-Desktop-1.0.0-rc.4-Setup.exe
+out-desktop/make/squirrel.windows/x64/ChatCOM-Desktop-1.0.0-rc.5-Setup.exe
 ```
 
 `npm run verify` performs the build, core and Desktop typechecks, deterministic tests, example configuration validation, production dependency audit, and npm package dry-run. Diagnostic commands may contact a real Codex runtime and require explicit authorization.

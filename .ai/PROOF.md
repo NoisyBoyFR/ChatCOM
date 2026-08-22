@@ -136,3 +136,23 @@ diagnostic through `WorkHostBridge`, and checks MCP success results for JSON
 serializability. Synthetic tests cover the REPORT route, SDK failure metadata,
 bounded MCP output, cleanup priority, cancellation, timeout, late streams,
 replay, and the no-second-mission invariant.
+
+## Real RC.5 WORK_HOST proof — 2026-08-22
+
+The genuine MCP host used the reloaded `chatcom_rc5_aab8e81` instance and
+completed one read-only exchange. The host sent the first `WORK_HOST/MISSION`,
+received and analyzed the `CODEX_LOCAL/REPORT`, then sent the correlated
+`WORK_HOST/NEXT_PROMPT`. Exactly three transmissions completed; the exchange
+stopped before a second Codex mission and cleanup was confirmed.
+
+- communication mode: `REAL_WORK_HOST`;
+- route: `MISSION → REPORT → NEXT_PROMPT`;
+- transmissions: `3/3`;
+- security: `READ_ONLY`;
+- cleanup: `CONFIRMED`;
+- Codex authentication: managed by the local Codex host;
+- no prompts, model responses, credentials, cookies, server messages, stack
+  traces, or thread identifiers were persisted or exposed.
+
+This records the already authorized proof; no additional relay was run by the
+release-readiness work.

@@ -6,6 +6,7 @@ const nativeRuntimeRelativePath = path.join("resources", "@openai", "codex-win32
 module.exports = {
   outDir: process.env.CHATCOM_OUT_DIR || "out-desktop",
   packagerConfig: {
+    ignore: [/^\/out(?:-desktop[^/]*|\/)/u],
     asar: {
       unpack: "**/node_modules/@openai/codex*/**",
     },

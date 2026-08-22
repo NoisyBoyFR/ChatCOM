@@ -27,7 +27,7 @@ test("SignPath workflow is manual, main-only, pinned and publication-blocked", a
   const workflow = await readFile(".github/workflows/sign-windows.yml", "utf8");
   assert.match(workflow, /workflow_dispatch:/u);
   assert.match(workflow, /confirmation:/u);
-  assert.match(workflow, /SIGN_RC4/u);
+  assert.match(workflow, /SIGN_RC5/u);
   assert.match(workflow, /environment: windows-code-signing/u);
   assert.match(workflow, /CHATCOM_REF -cne "refs\/heads\/main"/u);
   assert.match(workflow, /provider=SIGNPATH/u);
@@ -47,6 +47,7 @@ test("signing policy documents independent verification and no unsigned publicat
   const workflow = await readFile(".github/workflows/sign-windows.yml", "utf8");
   const policy = await readFile("CODE-SIGNING-POLICY.md", "utf8");
   const release = await readFile("RELEASING.md", "utf8");
+  const verifier = await readFile("scripts/verify-windows-signature.ps1", "utf8");
   const signedIndex = workflow.indexOf("CHATCOM_SIGNPATH_RESULT kind=SIGNED");
   const manifestIndex = workflow.lastIndexOf("desktop-build-manifest.json");
   assert.ok(signedIndex > 0);
@@ -54,5 +55,12 @@ test("signing policy documents independent verification and no unsigned publicat
   assert.match(workflow, /verify-windows-signature\.ps1[\s\S]*-ExpectedSubject[\s\S]*-RequireTimestamp/u);
   assert.match(workflow, /signatureState -cne "SIGNED"/u);
   assert.match(policy, /must not be attached to a public\s+release/u);
-  assert.match(release, /RC\.4 signing gate/u);
+  assert.match(release, /RC\.5 signing gate/u);
+  assert.match(verifier, /PUBLISHER_EXPECTED_MISSING/u);
+  assert.match(verifier, /PUBLISHER_MISMATCH/u);
+  assert.doesNotMatch(verifier, new RegExp(["CN", "ChatCOM"].join("="), "u"));
+  const obsoleteRelease = new RegExp(["RC", "4"].join("[.]?"), "u");
+  const obsoleteConfirmation = new RegExp(["SIGN", "RC", "4"].join("_"), "u");
+  assert.doesNotMatch(workflow, obsoleteRelease);
+  assert.doesNotMatch(workflow, obsoleteConfirmation);
 });

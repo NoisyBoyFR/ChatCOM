@@ -118,22 +118,18 @@ export async function resolveBundledCodexRuntime(): Promise<string> {
               : undefined;
   if (!target) throw new AppServerClientError("SDK_RUNTIME_NOT_FOUND");
   const [packageName, targetTriple, executableName] = target;
-  try {
-    let packageJsonPath: string;
+  const packageJsonCandidates: string[] = [];
+  const resourcesPath = (process as NodeJS.Process & { resourcesPath?: string }).resourcesPath;
+  if (resourcesPath !== undefined && packageName.startsWith("@openai/")) packageJsonCandidates.push(join(resourcesPath, "@openai", packageName.slice("@openai/".length), "package.json"));
+  try { packageJsonCandidates.push(moduleRequire.resolve(`${packageName}/package.json`)); } catch { /* packaged fallback is checked above */ }
+  for (const packageJsonPath of packageJsonCandidates) {
     try {
-      packageJsonPath = moduleRequire.resolve(`${packageName}/package.json`);
-    } catch {
-      const resourcesPath = (process as NodeJS.Process & { resourcesPath?: string }).resourcesPath;
-      if (resourcesPath === undefined || !packageName.startsWith("@openai/")) throw new Error("runtime-package");
-      packageJsonPath = join(resourcesPath, "@openai", packageName.slice("@openai/".length), "package.json");
-    }
-    const packageJson = JSON.parse(await readFile(packageJsonPath, "utf8")) as { version?: unknown };
-    if (typeof packageJson.version !== "string" || !(packageJson.version === EXPECTED_RUNTIME_VERSION || packageJson.version.startsWith(`${EXPECTED_RUNTIME_VERSION}-`))) throw new Error("runtime-version");
-    return await canonicalExecutable(join(dirname(packageJsonPath), "vendor", targetTriple, "bin", executableName));
-  } catch (error) {
-    if (error instanceof AppServerClientError) throw error;
-    throw new AppServerClientError("SDK_RUNTIME_NOT_FOUND");
+      const packageJson = JSON.parse(await readFile(packageJsonPath, "utf8")) as { version?: unknown };
+      if (typeof packageJson.version !== "string" || !(packageJson.version === EXPECTED_RUNTIME_VERSION || packageJson.version.startsWith(`${EXPECTED_RUNTIME_VERSION}-`))) continue;
+      return await canonicalExecutable(join(dirname(packageJsonPath), "vendor", targetTriple, "bin", executableName));
+    } catch { /* try the next bounded candidate */ }
   }
+  throw new AppServerClientError("SDK_RUNTIME_NOT_FOUND");
 }
 
 export function classifySdkFailure(value: unknown): SafeSdkFailureCategory {

@@ -66,7 +66,8 @@ async function waitFor(expression, expected = true) {
     if (await evaluate(expression) === expected) return;
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
-  throw new Error("ELECTRON_ASSERTION_TIMEOUT");
+  const state = await evaluate("({ runtime: document.querySelector('#runtime-status')?.textContent, authentication: document.querySelector('#auth-status')?.textContent, project: document.querySelector('#project-status')?.textContent, security: document.querySelector('#security-status')?.textContent, state: document.querySelector('#state-badge')?.textContent })");
+  throw new Error(`ELECTRON_ASSERTION_TIMEOUT ${JSON.stringify(state)}`);
 }
 
 async function setValue(selector, value) {

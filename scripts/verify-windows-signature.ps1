@@ -22,6 +22,9 @@ function Stop-SignatureVerification {
 }
 
 try {
+  if ($RequireTimestamp -and ([string]::IsNullOrWhiteSpace($ExpectedSubject) -or $ExpectedSubject -in @("UNKNOWN", "UNAVAILABLE"))) {
+    Stop-SignatureVerification "PUBLISHER_EXPECTED_MISSING"
+  }
   $resolved = Resolve-Path -LiteralPath $Path -ErrorAction Stop
   $item = Get-Item -LiteralPath $resolved.Path -Force
   if ($item.PSIsContainer) {
@@ -53,7 +56,7 @@ try {
     if ($signature.Status -ne "Valid" -or -not $signature.SignerCertificate) {
       Stop-SignatureVerification "AUTHENTICODE_INVALID"
     }
-    if ($ExpectedSubject -and $signature.SignerCertificate.Subject -cne $ExpectedSubject) {
+    if (-not [string]::IsNullOrWhiteSpace($ExpectedSubject) -and $signature.SignerCertificate.Subject -cne $ExpectedSubject) {
       Stop-SignatureVerification "PUBLISHER_MISMATCH"
     }
     if ($RequireTimestamp -and -not $signature.TimeStamperCertificate) {

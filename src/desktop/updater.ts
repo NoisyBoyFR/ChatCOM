@@ -5,6 +5,7 @@ import { readFile } from "node:fs/promises";
 export const CHATCOM_UPDATE_SERVER = "https://update.electronjs.org";
 export const CHATCOM_UPDATE_REPOSITORY = "NoisyBoyFR/ChatCOM";
 export const CHATCOM_PREVIEW_UPDATE_BASE_URL = "https://noisyboyfr.github.io/ChatCOM/updates";
+export const CHATCOM_PRODUCT_NAME = "ChatCOM";
 export const UPDATE_START_DELAY_MS = 10_000;
 export const UPDATE_INTERVAL_MS = 6 * 60 * 60 * 1_000;
 
@@ -132,6 +133,19 @@ function extractVersion(value: unknown): string | undefined {
   return match && versionParts(match[0]) ? match[0] : undefined;
 }
 
+const MAX_PUBLISHER_SUBJECT_LENGTH = 512;
+
+function normalizePublisherSubject(value: unknown): string {
+  if (typeof value !== "string") return "UNKNOWN";
+  const normalized = value.replace(/[\r\n\t]+/gu, " ").trim();
+  if (normalized.length === 0 || normalized.length > MAX_PUBLISHER_SUBJECT_LENGTH || normalized === "UNKNOWN" || normalized === "UNAVAILABLE") return "UNKNOWN";
+  return normalized;
+}
+
+function hasConfiguredPublisherSubject(value: unknown): value is string {
+  return normalizePublisherSubject(value) !== "UNKNOWN";
+}
+
 export function buildUpdateFeedUrl(currentVersion: string, channel: UpdateChannel = "stable", previewBaseUrl = CHATCOM_PREVIEW_UPDATE_BASE_URL): string {
   if (channel === "preview") return `${previewBaseUrl.replace(/\/$/u, "")}/preview/win32/x64`;
   return `${CHATCOM_UPDATE_SERVER}/${CHATCOM_UPDATE_REPOSITORY}/win32-x64/${encodeURIComponent(currentVersion)}`;
@@ -142,7 +156,7 @@ export function evaluateUpdatePolicy(input: UpdatePolicyInput): UpdatePolicyResu
   if (input.platform !== "win32" || input.architecture !== "x64") return { enabled: false, reason: "PLATFORM_UNSUPPORTED" };
   if (input.signatureState !== "SIGNED") return { enabled: false, reason: "SIGNATURE_REQUIRED" };
   if (!input.timestamped) return { enabled: false, reason: "SIGNATURE_TIMESTAMP_REQUIRED" };
-  if (input.publisher !== "ChatCOM") return { enabled: false, reason: "PUBLISHER_INVALID" };
+  if (!hasConfiguredPublisherSubject(input.publisher)) return { enabled: false, reason: "PUBLISHER_INVALID" };
   if (input.repository !== CHATCOM_UPDATE_REPOSITORY) return { enabled: false, reason: "UPDATE_SOURCE_INVALID" };
   if (!versionParts(input.currentVersion) || !versionParts(input.minimumUpdaterVersion)) return { enabled: false, reason: "VERSION_INVALID" };
   return { enabled: true, reason: "READY" };
@@ -165,7 +179,7 @@ export function validateUpdateManifest(raw: unknown, expected: { currentVersion:
   if (manifest.platform !== "windows" || manifest.architecture !== "x64") return { enabled: false, reason: "PLATFORM_MISMATCH" };
   if (manifest.channel !== expected.channel) return { enabled: false, reason: "CHANNEL_MISMATCH" };
   if (typeof manifest.version !== "string" || compareVersions(manifest.version, expected.currentVersion) <= 0) return { enabled: false, reason: "VERSION_NOT_NEWER" };
-  if (manifest.signatureState !== "SIGNED" || manifest.publisher !== "ChatCOM" || manifest.timestamped !== true) return { enabled: false, reason: "SIGNATURE_INVALID" };
+  if (manifest.signatureState !== "SIGNED" || !hasConfiguredPublisherSubject(manifest.publisher) || manifest.timestamped !== true) return { enabled: false, reason: "SIGNATURE_INVALID" };
   if (typeof manifest.minimumUpdaterVersion !== "string" || compareVersions(manifest.minimumUpdaterVersion, "1.0.0") > 0) return { enabled: false, reason: "UPDATER_TOO_OLD" };
   if (!Array.isArray(manifest.artifacts) || manifest.artifacts.length !== 3) return { enabled: false, reason: "ARTIFACT_SET_INVALID" };
   const kinds = new Set<string>();
@@ -185,12 +199,12 @@ export async function verifyArtifactHash(filePath: string, expectedSha256: strin
 
 export function inspectWindowsAuthenticode(filePath: string): Promise<AuthenticodeProof> {
   if (process.platform !== "win32") return Promise.resolve({ signatureState: "INVALID", publisher: "UNAVAILABLE", timestamped: false });
-  const script = "$s=Get-AuthenticodeSignature -LiteralPath $args[0]; $publisher='UNKNOWN'; if ($s.SignerCertificate -and $s.SignerCertificate.Subject -match 'CN=ChatCOM(?:,|$)') {$publisher='ChatCOM'}; [pscustomobject]@{Status=[string]$s.Status;Publisher=$publisher;Timestamped=($null -ne $s.TimeStamperCertificate)} | ConvertTo-Json -Compress";
+  const script = "$s=Get-AuthenticodeSignature -LiteralPath $args[0]; $publisher=if ($s.SignerCertificate) {[string]$s.SignerCertificate.Subject} else {$null}; [pscustomobject]@{Status=[string]$s.Status;Publisher=$publisher;Timestamped=($null -ne $s.TimeStamperCertificate)} | ConvertTo-Json -Compress";
   return new Promise((resolve) => {
     execFile("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", script, filePath], { windowsHide: true, timeout: 5_000, maxBuffer: 8_192 }, (_error, stdout) => {
       try {
         const result = JSON.parse(stdout) as { Status?: unknown; Publisher?: unknown; Timestamped?: unknown };
-        resolve({ signatureState: result.Status === "Valid" ? "SIGNED" : result.Status === "NotSigned" ? "UNSIGNED" : "INVALID", publisher: result.Publisher === "ChatCOM" ? "ChatCOM" : "UNKNOWN", timestamped: result.Timestamped === true });
+        resolve({ signatureState: result.Status === "Valid" ? "SIGNED" : result.Status === "NotSigned" ? "UNSIGNED" : "INVALID", publisher: normalizePublisherSubject(result.Publisher), timestamped: result.Timestamped === true });
       } catch { resolve({ signatureState: "INVALID", publisher: "UNKNOWN", timestamped: false }); }
     });
   });

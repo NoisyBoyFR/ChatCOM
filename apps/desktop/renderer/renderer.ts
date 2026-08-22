@@ -4,6 +4,7 @@ import type { DesktopPreferences, Theme, TextSize, UpdateChannel, WindowMode } f
 import type { UpdateSnapshot } from "../../../src/desktop/updater.js";
 import { SettingsSession, type EditablePreferences } from "../../../src/desktop/settings-session.js";
 import { DesktopStartCoordinator, isDesktopStartEnabled } from "../../../src/desktop/start-policy.js";
+import type { BindingSummary } from "../../../src/desktop/bindings.js";
 
 const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
 const projectRoot = $("project-root") as HTMLInputElement;
@@ -27,6 +28,10 @@ const settingsSave = $("save-settings") as HTMLButtonElement;
 const settingsCancel = $("cancel-settings") as HTMLButtonElement;
 const checkUpdates = $("check-updates") as HTMLButtonElement;
 const restartUpdate = $("restart-update") as HTMLButtonElement;
+const bindingAlias = $("binding-alias") as HTMLInputElement;
+const bindingThreadId = $("binding-thread-id") as HTMLInputElement;
+const bindingStatus = $("binding-status");
+const bindingList = $("binding-list");
 const updateState = $("update-state");
 const settingsSession = new SettingsSession();
 let snapshot: ConversationSnapshot | undefined;
@@ -156,6 +161,20 @@ function renderUpdateState(next: UpdateSnapshot): void {
   restartUpdate.hidden = !next.readyToInstall;
   checkUpdates.disabled = next.status === "CHECKING" || !next.publicUpdatesEnabled;
 }
+function renderBindings(bindings: BindingSummary[]): void {
+  bindingList.replaceChildren();
+  if (bindings.length === 0) { bindingList.textContent = t("bindingNoEntries"); return; }
+  for (const binding of bindings) {
+    const row = document.createElement("article"); row.className = "binding-row";
+    const label = document.createElement("strong"); label.textContent = `${binding.alias} · ${binding.state}`;
+    const meta = document.createElement("span"); meta.textContent = `${binding.projectRoot} · ${binding.threadTail}`;
+    const validate = document.createElement("button"); validate.className = "ghost"; validate.textContent = t("bindingValidate"); validate.addEventListener("click", async () => { try { const result = await window.chatcomDesktop.validateBinding(binding.bindingId, projectRoot.value || undefined); bindingStatus.textContent = `${result.alias}: ${result.state}`; } catch (error) { showError(error); } });
+    const disable = document.createElement("button"); disable.className = "ghost"; disable.textContent = t("bindingDisable"); disable.addEventListener("click", async () => { try { await window.chatcomDesktop.disableBinding(binding.bindingId); await refreshBindings(); } catch (error) { showError(error); } });
+    const remove = document.createElement("button"); remove.className = "ghost"; remove.textContent = t("bindingRemove"); remove.addEventListener("click", async () => { try { await window.chatcomDesktop.removeBinding(binding.bindingId); await refreshBindings(); } catch (error) { showError(error); } });
+    row.append(label, meta, validate, disable, remove); bindingList.append(row);
+  }
+}
+async function refreshBindings(): Promise<void> { try { renderBindings(await window.chatcomDesktop.listBindings()); } catch (error) { showError(error); } }
 function closeSettings(): void {
   settingsPanel.hidden = true;
   settingsStatus.textContent = "";
@@ -218,6 +237,8 @@ settingsCancel.addEventListener("click", cancelSettings);
 for (const id of ["language", "theme", "window-mode", "text-size", "reduce-motion", "auto-scroll", "auto-update", "update-channel"]) $(id).addEventListener("change", updateSettingsDraft);
 checkUpdates.addEventListener("click", async () => { try { renderUpdateState(await window.chatcomDesktop.checkForUpdates()); } catch (error) { showError(error); } });
 restartUpdate.addEventListener("click", async () => { try { await window.chatcomDesktop.restartAndInstall(); } catch (error) { showError(error); } });
+$("add-binding").addEventListener("click", async () => { try { if (!projectRoot.value.trim()) throw new Error("CHATCOM_DESKTOP kind=FAILURE code=PROJECT_REQUIRED"); const created = await window.chatcomDesktop.createBinding({ alias: bindingAlias.value, projectRoot: projectRoot.value, threadId: bindingThreadId.value }); bindingStatus.textContent = `${created.alias}: ${t("bindingPreserved")}`; bindingAlias.value = ""; bindingThreadId.value = ""; await refreshBindings(); } catch (error) { showError(error); } });
+$("validate-binding").addEventListener("click", async () => { try { const selected = (await window.chatcomDesktop.listBindings())[0]; if (!selected) { bindingStatus.textContent = t("bindingNoEntries"); return; } const result = await window.chatcomDesktop.validateBinding(selected.bindingId, projectRoot.value || undefined); bindingStatus.textContent = `${result.alias}: ${result.state}`; } catch (error) { showError(error); } });
 settingsPanel.addEventListener("keydown", (event) => {
   if (event.key === "Escape") { event.preventDefault(); cancelSettings(); return; }
   if (event.key === "Enter" && !(event.target instanceof HTMLTextAreaElement) && !(event.target instanceof HTMLButtonElement)) { event.preventDefault(); void saveSettings(); return; }
@@ -268,5 +289,6 @@ mission.addEventListener("input", updateMissionCount);
 window.chatcomDesktop.onEvent(handleEvent);
 window.chatcomDesktop.onUpdate(renderUpdateState);
 void window.chatcomDesktop.getUpdateState().then(renderUpdateState).catch(showError);
+void refreshBindings();
 void window.chatcomDesktop.getState().then((state) => { preferences = state.preferences; locale = preferences.language; setLanguage(locale); applyDisplaySettings(preferences); projectRoot.value = preferences.projectRoot ?? ""; phase.value = preferences.phase ?? ""; point.value = preferences.point ?? ""; maxCycles.value = String(preferences.maxCycles); setSettingsControls(preferences); renderPreflight(state.preflight); renderSnapshot(state.snapshot); }).catch(showError);
 setLanguage(locale); updateMissionCount(); setStatus(t("ready")); setInterval(() => { if (snapshot) renderSnapshot(snapshot); }, 1000);

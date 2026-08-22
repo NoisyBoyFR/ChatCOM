@@ -181,3 +181,16 @@ an additional `resources/@openai` tree beside the asar-unpacked runtime; the
 new package removes that duplication and safely cleans only a verified output
 directory. These are local unsigned validation artefacts, not a new WORK proof
 or a public update feed.
+
+## RC.6 persistent binding readiness — no new real proof claimed
+
+RC.6 adds an opt-in `PERSISTENT_BOUND` lifecycle alongside the unchanged default
+`EPHEMERAL` lifecycle. The local binding registry uses exact UUIDs, canonical
+project validation, atomic user-data writes, masked output, and no title-based
+selection. Synthetic tests cover `resumeThread()`, preserved cleanup, project
+mismatch, registry operations, MCP serialization, and the invariant that
+persistent cleanup never calls `deleteThread()`.
+
+No new MCP or Codex real proof was executed for RC.6. A separately authorized proof
+requires a reloaded RC.6 instance and a validated local binding. The current status
+is `READY_FOR_BOUND_WORK_PROOF`.

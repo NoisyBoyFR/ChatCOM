@@ -10,6 +10,7 @@ import { MAX_CONTENT_BYTES, MAX_ROUTE_BYTES, DELIVERY_STATUSES, MESSAGE_DATE_PAT
 import { loadRelayConfig, RelayConfigError, type PortableRelayConfig } from "./relay-config.js";
 import { runPortableRelay, type PortableRelayRunResult } from "./portable-relay.js";
 import { WorkHostBridge, type WorkHostOpenResult, type WorkHostCompleteResult } from "./work-host-bridge.js";
+import { BindingStore, defaultBindingRegistryPath } from "./desktop/bindings.js";
 
 const packageRequire = createRequire(import.meta.url);
 const packageMetadata = packageRequire("../package.json") as { version?: unknown };
@@ -19,9 +20,14 @@ export const CHATCOM_VALIDATE_TOOL = "chatcom_validate_config" as const;
 export const CHATCOM_RELAY_TOOL = "chatcom_run_relay" as const;
 export const CHATCOM_WORK_OPEN_TOOL = "chatcom_work_open" as const;
 export const CHATCOM_WORK_COMPLETE_TOOL = "chatcom_work_complete" as const;
+export const CHATCOM_BINDING_CREATE_TOOL = "chatcom_binding_create" as const;
+export const CHATCOM_BINDING_VALIDATE_TOOL = "chatcom_binding_validate" as const;
+export const CHATCOM_BINDING_LIST_TOOL = "chatcom_binding_list" as const;
+export const CHATCOM_BINDING_DISABLE_TOOL = "chatcom_binding_disable" as const;
+export const CHATCOM_BINDING_REMOVE_TOOL = "chatcom_binding_remove" as const;
 
 export const CHATCOM_MCP_INSTRUCTIONS =
-  "ChatCOM is a local read-only Work-to-Codex relay. Call chatcom_validate_config before a relay. Run the legacy relay only with explicit user authorization. For a real host exchange, call chatcom_work_open with a validated WORK_HOST MISSION, let the MCP host analyze the returned REPORT, then call chatcom_work_complete with exactly one WORK_HOST NEXT_PROMPT. WORK authentication is managed by the host; ChatCOM never reads host credentials. The real-host exchange performs exactly three transmissions, never runs a second Codex mission, and fails closed when cleanup is not confirmed. The legacy chatcom_run_relay tool is LOCAL_SIMULATION only.";
+  "ChatCOM is a local read-only Work-to-Codex relay. Call chatcom_validate_config before a relay. Use the local binding tools only for explicit exact-UUID registry operations. For a real host exchange, call chatcom_work_open with a validated WORK_HOST MISSION, let the MCP host analyze the returned REPORT, then call chatcom_work_complete with exactly one WORK_HOST NEXT_PROMPT. Omit binding_id for the default EPHEMERAL lifecycle; pass a validated binding_id for PERSISTENT_BOUND resume and preserved cleanup. WORK authentication is managed by the host; ChatCOM never reads host credentials. Every real-host exchange performs exactly three transmissions, never runs a second Codex mission, and fails closed when cleanup is not confirmed. The legacy chatcom_run_relay tool is LOCAL_SIMULATION only and requires explicit user authorization.";
 
 const configPathSchema = z.string().trim().min(1).max(4_096).describe("Path to a ChatCOM relay configuration file.");
 const uuidSchema = z.string().regex(MESSAGE_UUID_PATTERN);
@@ -70,6 +76,7 @@ export interface ChatComMcpDependencies {
   loadConfig(path: string): Promise<PortableRelayConfig>;
   runRelay(config: PortableRelayConfig, timeoutMs: number, signal?: AbortSignal): Promise<PortableRelayRunResult>;
   workHostBridge?: WorkHostBridge;
+  bindingStore?: BindingStore;
 }
 
 const DEFAULT_DEPENDENCIES: ChatComMcpDependencies = {
@@ -90,6 +97,10 @@ const workHostOpenOutputSchema = {
   completed_transmissions: z.literal(2),
   cleanup: z.literal("PENDING"),
   stopped_before_second_codex_mission: z.literal(true),
+  conversation_mode: z.enum(["EPHEMERAL", "PERSISTENT_BOUND"]),
+  binding_id: uuidSchema.optional(),
+  thread_preserved: z.literal("PENDING"),
+  thread_deleted: z.literal("PENDING"),
 };
 
 const workHostCompleteOutputSchema = {
@@ -104,6 +115,10 @@ const workHostCompleteOutputSchema = {
   completed_transmissions: z.literal(3),
   cleanup: z.literal("CONFIRMED"),
   stopped_before_second_codex_mission: z.literal(true),
+  conversation_mode: z.enum(["EPHEMERAL", "PERSISTENT_BOUND"]),
+  binding_id: uuidSchema.optional(),
+  thread_preserved: z.enum(["CONFIRMED", "PENDING"]),
+  thread_deleted: z.enum(["CONFIRMED", "PENDING"]),
 };
 
 function openStructured(result: WorkHostOpenResult) {
@@ -120,6 +135,10 @@ function openStructured(result: WorkHostOpenResult) {
     completed_transmissions: result.completedTransmissions,
     cleanup: result.cleanup,
     stopped_before_second_codex_mission: result.stoppedBeforeSecondCodexMission,
+    conversation_mode: result.conversationMode ?? "EPHEMERAL",
+    ...(result.bindingId === undefined ? {} : { binding_id: result.bindingId }),
+    thread_preserved: result.threadPreserved ?? "PENDING",
+    thread_deleted: result.threadDeleted ?? "PENDING",
   };
 }
 
@@ -136,6 +155,10 @@ function completeStructured(result: WorkHostCompleteResult) {
     completed_transmissions: result.completedTransmissions,
     cleanup: result.cleanup,
     stopped_before_second_codex_mission: result.stoppedBeforeSecondCodexMission,
+    conversation_mode: result.conversationMode ?? "EPHEMERAL",
+    ...(result.bindingId === undefined ? {} : { binding_id: result.bindingId }),
+    thread_preserved: result.threadPreserved ?? "PENDING",
+    thread_deleted: result.threadDeleted ?? "PENDING",
   };
 }
 
@@ -200,6 +223,7 @@ function toolFailure(error: unknown) {
 
 export function createChatComMcpServer(dependencies: ChatComMcpDependencies = DEFAULT_DEPENDENCIES): McpServer {
   const workHostBridge = dependencies.workHostBridge ?? new WorkHostBridge();
+  const bindingStore = dependencies.bindingStore ?? new BindingStore(defaultBindingRegistryPath());
   const server = new McpServer(
     { name: "chatcom", version: CHATCOM_MCP_VERSION },
     { instructions: CHATCOM_MCP_INSTRUCTIONS },
@@ -215,14 +239,15 @@ export function createChatComMcpServer(dependencies: ChatComMcpDependencies = DE
         mission: messageSchema,
         timeout_ms: z.number().int().positive().max(3_600_000).optional(),
         idle_timeout_ms: z.number().int().positive().max(3_600_000).optional(),
+        binding_id: uuidSchema.optional().describe("Validated local binding identifier. Omit for an ephemeral conversation."),
       },
       outputSchema: workHostOpenOutputSchema,
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
     },
-    async ({ config_path, mission, timeout_ms, idle_timeout_ms }, extra) => {
+    async ({ config_path, mission, timeout_ms, idle_timeout_ms, binding_id }, extra) => {
       try {
         const config = await dependencies.loadConfig(resolve(config_path));
-        const result = await workHostBridge.open(config, mission as MessageEnvelope, timeout_ms, idle_timeout_ms, extra.signal);
+        const result = await workHostBridge.open(config, mission as MessageEnvelope, timeout_ms, idle_timeout_ms, extra.signal, binding_id);
         const structuredContent = openStructured(result);
         assertMcpSerializable(structuredContent);
         return { structuredContent, content: [{ type: "text" as const, text: "CHATCOM_WORK_HOST kind=REPORT_READY transmissions=2 cleanup=PENDING mode=REAL_WORK_HOST" }] };
@@ -230,11 +255,54 @@ export function createChatComMcpServer(dependencies: ChatComMcpDependencies = DE
     },
   );
 
+  const bindingSummaryShape = {
+    binding_id: uuidSchema,
+    alias: utf8TextSchema(256, "Binding alias."),
+    project_root: utf8TextSchema(4_096, "Canonical project path."),
+    created_at: dateSchema,
+    mode: z.literal("PERSISTENT_BOUND"),
+    state: z.enum(["VALID", "DISABLED", "PROJECT_DIFFERENT", "NOT_FOUND"]),
+    thread_tail: z.string().max(16),
+  };
+  const bindingSummaryObject = z.object(bindingSummaryShape);
+  const bindingFailure = (error: unknown) => toolFailure(error);
+  server.registerTool(CHATCOM_BINDING_CREATE_TOOL, {
+    title: "Create a local Codex binding",
+    description: "Create an explicit local binding by exact thread identifier without contacting Codex. The identifier is never returned.",
+    inputSchema: { alias: utf8TextSchema(64, "Readable local alias."), project_root: configPathSchema, thread_id: uuidSchema },
+    outputSchema: bindingSummaryShape,
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+  }, async ({ alias, project_root, thread_id }) => {
+    try { const summary = await bindingStore.create(alias, project_root, thread_id); const structuredContent = { binding_id: summary.bindingId, alias: summary.alias, project_root: summary.projectRoot, created_at: summary.createdAt, mode: summary.mode, state: summary.state, thread_tail: summary.threadTail }; assertMcpSerializable(structuredContent); return { structuredContent, content: [{ type: "text" as const, text: "CHATCOM_BINDING kind=CREATED mode=PERSISTENT_BOUND" }] }; }
+    catch (error) { return bindingFailure(error); }
+  });
+  server.registerTool(CHATCOM_BINDING_VALIDATE_TOOL, {
+    title: "Validate a local Codex binding",
+    description: "Validate an explicit binding and its project path without contacting Codex or reading conversation history.",
+    inputSchema: { binding_id: uuidSchema, project_root: configPathSchema.optional() },
+    outputSchema: bindingSummaryShape,
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  }, async ({ binding_id, project_root }) => {
+    try { const summary = await bindingStore.validate(binding_id, project_root); const structuredContent = { binding_id: summary.bindingId, alias: summary.alias || "UNKNOWN", project_root: summary.projectRoot || "UNKNOWN", created_at: summary.createdAt || new Date(0).toISOString(), mode: summary.mode, state: summary.state, thread_tail: summary.threadTail }; assertMcpSerializable(structuredContent); return { structuredContent, content: [{ type: "text" as const, text: `CHATCOM_BINDING kind=VALID state=${summary.state}` }] }; }
+    catch (error) { return bindingFailure(error); }
+  });
+  server.registerTool(CHATCOM_BINDING_LIST_TOOL, {
+    title: "List local Codex binding aliases",
+    description: "List local aliases and masked thread tails without exposing thread identifiers.",
+    inputSchema: {}, outputSchema: { bindings: z.array(bindingSummaryObject) }, annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  }, async () => { try { const bindings = (await bindingStore.list()).map((summary) => ({ binding_id: summary.bindingId, alias: summary.alias, project_root: summary.projectRoot, created_at: summary.createdAt, mode: summary.mode, state: summary.state, thread_tail: summary.threadTail })); const structuredContent = { bindings }; assertMcpSerializable(structuredContent); return { structuredContent, content: [{ type: "text" as const, text: `CHATCOM_BINDING kind=LIST count=${bindings.length}` }] }; } catch (error) { return bindingFailure(error); } });
+  for (const [tool, title, action] of [[CHATCOM_BINDING_DISABLE_TOOL, "Disable a local Codex binding", "disable"], [CHATCOM_BINDING_REMOVE_TOOL, "Remove a local Codex binding", "remove"]] as const) {
+    server.registerTool(tool, { title, description: "Change only the local registry; never delete the Codex conversation.", inputSchema: { binding_id: uuidSchema }, outputSchema: { status: z.literal("SUCCESS"), binding_id: uuidSchema, thread_deleted: z.literal("NOT_REQUESTED") }, annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false } }, async ({ binding_id }) => {
+      try { if (action === "disable") await bindingStore.disable(binding_id); else await bindingStore.remove(binding_id); const structuredContent = { status: "SUCCESS" as const, binding_id, thread_deleted: "NOT_REQUESTED" as const }; assertMcpSerializable(structuredContent); return { structuredContent, content: [{ type: "text" as const, text: `CHATCOM_BINDING kind=${action.toUpperCase()} thread_deleted=NOT_REQUESTED` }] }; }
+      catch (error) { return bindingFailure(error); }
+    });
+  }
+
   server.registerTool(
     CHATCOM_WORK_COMPLETE_TOOL,
     {
       title: "Complete a real WORK host exchange",
-      description: "Accept exactly one validated NEXT_PROMPT from the same MCP host exchange, delete the single Codex thread, close the client, and confirm cleanup without running a second Codex mission.",
+      description: "Accept exactly one validated NEXT_PROMPT from the same MCP host exchange, delete an ephemeral thread or preserve a bound thread, close the client, and confirm cleanup without running a second Codex mission.",
       inputSchema: {
         session_id: uuidSchema,
         next_prompt: messageSchema,

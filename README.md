@@ -11,11 +11,11 @@
 
 [![Download ChatCOM Desktop](https://img.shields.io/badge/Download-ChatCOM_Desktop_for_Windows-0078D4?style=for-the-badge&logo=windows11&logoColor=white)](https://github.com/NoisyBoyFR/ChatCOM/releases/download/v1.0.0-rc.3/ChatCOM-Desktop-1.0.0-rc.3-Setup.exe)
 
-**Current source candidate:** `1.0.0-rc.5` · Windows x64 · the protected Artifact Signing workflow is ready, but public updates remain disabled until the external identity and certificate profile are configured
+**Current source candidate:** `1.0.0-rc.6` · Windows x64 · the protected Artifact Signing workflow is ready, but public updates remain disabled until the external identity and certificate profile are configured
 
-## RC.5 publication and signing gate
+## RC.6 publication and signing gate
 
-RC.5 is a source candidate, not a public release. Windows publication is
+RC.6 is a source candidate, not a public release. Windows publication is
 blocked until the owner completes the SignPath Foundation Open Source Code
 Signing application and the protected workflow produces a `SIGNED` manifest.
 The workflow is manual, runs only from `main`, cannot create tags or Releases,
@@ -61,10 +61,11 @@ The `WORK_HOST` route is the only route eligible for a real WORK ↔ Codex proof
 - versioned, validated preferences that never store mission or message content;
 - bounded diagnostics without prompts, responses, credentials, thread IDs, or stacks.
 - Desktop communication status distinguishes `WORK_HOST`, `CODEX_LOCAL`, `USER`, `REAL_WORK_HOST`, and `LOCAL_SIMULATION`.
+- RC.6 supports an explicit temporary conversation or an exact local Codex binding; bound conversations are resumed by UUID and preserved after cleanup. See [persistent bindings](PERSISTENT-BINDINGS.md).
 
 ## Download and install on Windows
 
-The public download links below still point to the last published RC.3. RC.5 is
+The public download links below still point to the last published RC.3. RC.6 is
 local validation work only: it must not be published or used for automatic
 updates while its Windows artifacts are unsigned. Stable uses Electron's
 main-process `autoUpdater` with the official public
@@ -121,7 +122,7 @@ The complete machine-readable build information is available in [desktop-build-m
 - IPC channels and senders are allowlisted and validated;
 - diagnostics expose bounded status metadata only.
 
-The authenticated MCP relay has completed a real three-transmission proof with confirmed cleanup. The RC.5 updater architecture, Desktop interface, localization, settings, installer, SignPath guards, and WORK_HOST bridge are covered by the deterministic test suite and multi-platform CI. The real WORK_HOST proof is recorded in [`.ai/PROOF.md`](.ai/PROOF.md).
+The authenticated MCP relay has completed a real three-transmission proof with confirmed cleanup. The RC.6 updater architecture, Desktop interface, localization, settings, installer, SignPath guards, and WORK_HOST bridge are covered by the deterministic test suite and multi-platform CI. The real WORK_HOST proof is recorded in [`.ai/PROOF.md`](.ai/PROOF.md).
 
 ## Developer quick start
 
@@ -140,7 +141,7 @@ npm run desktop:make
 The expected installer is:
 
 ```text
-out-desktop/make/squirrel.windows/x64/ChatCOM-Desktop-1.0.0-rc.5-Setup.exe
+out-desktop/make/squirrel.windows/x64/ChatCOM-Desktop-1.0.0-rc.6-Setup.exe
 ```
 
 `npm run verify` performs the build, core and Desktop typechecks, deterministic tests, example configuration validation, production dependency audit, and npm package dry-run. Diagnostic commands may contact a real Codex runtime and require explicit authorization.
@@ -173,11 +174,12 @@ node .\dist\portable-cli.js run --config .\relay.config.example.json --timeout-m
 
 ## MCP bridge
 
-ChatCOM exposes four STDIO MCP tools:
+ChatCOM exposes the RC.6 bridge tools plus bounded local binding-management tools:
 
 - `chatcom_validate_config` validates configuration without starting Codex;
 - `chatcom_work_open` accepts one validated `WORK_HOST` MISSION, runs one read-only Codex report, and returns `REPORT` while leaving the exchange open;
-- `chatcom_work_complete` accepts exactly one `WORK_HOST` `NEXT_PROMPT`, deletes the single Codex thread, closes the client, and confirms cleanup;
+- `chatcom_work_complete` accepts exactly one `WORK_HOST` `NEXT_PROMPT`, deletes an ephemeral thread or preserves a bound thread, closes the client, and confirms cleanup;
+- `chatcom_binding_create`, `chatcom_binding_validate`, `chatcom_binding_list`, `chatcom_binding_disable`, and `chatcom_binding_remove` manage exact local bindings without reading conversation history;
 - `chatcom_run_relay` remains a compatibility tool named `LOCAL_SIMULATION`, not a real WORK proof.
 
 The real protocol is:
@@ -188,6 +190,8 @@ The real protocol is:
 
 The final response is successful only with exactly three transmissions and `cleanup=CONFIRMED`. A missing WORK host is not replaced by Codex and yields `READY_FOR_WORK_PROOF`.
 
+The default is `EPHEMERAL`. A `binding_id` enables `PERSISTENT_BOUND` only after exact UUID and canonical project validation. Titles never select conversations, and full thread IDs never appear in bounded output. See [PERSISTENT-BINDINGS.md](PERSISTENT-BINDINGS.md).
+
 Build ChatCOM, copy [`.codex/config.toml.example`](.codex/config.toml.example) into a trusted Codex configuration, replace the placeholders with absolute paths, and restart the MCP host. Keep the relay tool in prompt-approval mode.
 
 ## Project resources
@@ -197,6 +201,7 @@ Build ChatCOM, copy [`.codex/config.toml.example`](.codex/config.toml.example) i
 - [Release procedure](RELEASING.md)
 - [Operational proof](.ai/PROOF.md)
 - [Durable Codex prompt](CODEX-CHATCOM-PROMPT.md)
+- [Persistent Codex bindings](PERSISTENT-BINDINGS.md)
 - [License](LICENSE)
 - [Privacy notice](PRIVACY.md)
 - [Security policy](SECURITY.md)

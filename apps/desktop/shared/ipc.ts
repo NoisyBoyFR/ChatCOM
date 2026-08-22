@@ -2,6 +2,7 @@ import type { ConversationEvent, ConversationSnapshot } from "../../../src/conve
 import type { PreflightResult } from "../../../src/desktop/preflight.js";
 import type { DesktopPreferences, TextSize, Theme, UpdateChannel, WindowMode } from "../../../src/desktop/preferences.js";
 import type { UpdateSnapshot } from "../../../src/desktop/updater.js";
+import type { BindingSummary } from "../../../src/desktop/bindings.js";
 
 export const DESKTOP_IPC_CHANNELS = {
   getState: "desktop:get-state",
@@ -21,6 +22,11 @@ export const DESKTOP_IPC_CHANNELS = {
   checkForUpdates: "desktop:check-for-updates",
   restartAndInstall: "desktop:restart-and-install",
   updateEvent: "desktop:update-event",
+  listBindings: "desktop:list-bindings",
+  createBinding: "desktop:create-binding",
+  validateBinding: "desktop:validate-binding",
+  disableBinding: "desktop:disable-binding",
+  removeBinding: "desktop:remove-binding",
   event: "desktop:event",
 } as const;
 
@@ -42,6 +48,8 @@ export interface DesktopConfigureInput {
   globalTimeoutMs: number;
 }
 
+export interface DesktopBindingCreateInput { alias: string; projectRoot: string; threadId: string; }
+
 export interface DesktopApi {
   getState(): Promise<DesktopStateResponse>;
   chooseProject(): Promise<{ canceled: boolean; projectRoot?: string }>;
@@ -61,4 +69,9 @@ export interface DesktopApi {
   exportReport(): Promise<{ canceled: boolean; path?: string }>;
   resetPreferences(): Promise<void>;
   onEvent(listener: (event: ConversationEvent) => void): () => void;
+  listBindings(): Promise<BindingSummary[]>;
+  createBinding(input: DesktopBindingCreateInput): Promise<BindingSummary>;
+  validateBinding(bindingId: string, projectRoot?: string): Promise<BindingSummary>;
+  disableBinding(bindingId: string): Promise<void>;
+  removeBinding(bindingId: string): Promise<void>;
 }

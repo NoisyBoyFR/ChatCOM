@@ -6,6 +6,9 @@ import { createMessageForTests } from "../local-relay.js";
 import type { MessageEnvelope } from "../message-contract.js";
 import { RelayFailure } from "../local-relay.js";
 import { WorkHostBridge } from "../work-host-bridge.js";
+import { BindingStore } from "../desktop/bindings.js";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 
 const config = { version: "1.0" as const, projectRoot: "C:\\project", phase: "RC5", point: "BRIDGE", mission: "config mission" };
 const sessionId = "11111111-1111-4111-8111-111111111111";
@@ -25,16 +28,20 @@ class FakeClient implements CodexSdkRelayClient {
   readonly starts: string[] = [];
   readonly turns: { threadId: string; schema: any; signal?: AbortSignal }[] = [];
   readonly deletes: string[] = [];
+  readonly resumes: string[] = [];
   closeCalls = 0;
   deleteError = false;
   runError: AppServerClientError | undefined;
 
+  constructor(private readonly reportSessionId = sessionId, private readonly reportMissionId = missionId, private readonly responseMessageId = reportId) {}
+
   async initialize(): Promise<void> {}
   async startThread(): Promise<string> { this.starts.push("codex-thread"); return "internal-thread-id"; }
+  async resumeThread(threadId: string): Promise<string> { this.resumes.push(threadId); return "internal-bound-thread-id"; }
   async runTurn(threadId: string, _prompt: string, schema?: unknown, signal?: AbortSignal): Promise<string> {
     this.turns.push({ threadId, schema, signal });
     if (this.runError !== undefined) throw this.runError;
-    return JSON.stringify(createMessageForTests({ session_id: sessionId, message_id: reportId, correlation_id: missionId, sequence: 2, sender: "CODEX_LOCAL", recipient: "WORK_HOST", type: "REPORT", phase: config.phase, point: config.point, content: "Bounded technical report.", user_action_needed: false }));
+    return JSON.stringify(createMessageForTests({ session_id: this.reportSessionId, message_id: this.responseMessageId, correlation_id: this.reportMissionId, sequence: 2, sender: "CODEX_LOCAL", recipient: "WORK_HOST", type: "REPORT", phase: config.phase, point: config.point, content: "Bounded technical report.", user_action_needed: false }));
   }
   async deleteThread(threadId: string): Promise<void> { if (this.deleteError) throw new AppServerClientError("THREAD_DELETE_UNCONFIRMED"); this.deletes.push(threadId); }
   async close(): Promise<{ exited: boolean; forced: boolean }> { this.closeCalls += 1; return { exited: true, forced: false }; }
@@ -134,4 +141,51 @@ test("cancelled WORK_HOST opening never creates a Codex thread", async () => {
   controller.abort();
   await assert.rejects(bridgeWith(client).open(config, mission(), 10_000, 10_000, controller.signal), (error) => error instanceof RelayFailure && error.code === "RELAY_CANCELLED");
   assert.equal(client.starts.length, 0);
+});
+
+test("PERSISTENT_BOUND resumes the exact binding and preserves the thread", async () => {
+  const projectRoot = process.cwd();
+  const persistentConfig = { ...config, projectRoot };
+  const store = new BindingStore(join(tmpdir(), `chatcom-binding-test-${Date.now()}-${Math.random().toString(16).slice(2)}.json`));
+  const client = new FakeClient();
+  const binding = await store.create("FitMyLife CODEX", projectRoot, "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
+  try {
+    const bridge = new WorkHostBridge({ createClient: async () => client, randomUUID: () => sessionId, bindingStore: store });
+    const opened = await bridge.open(persistentConfig, mission(), 10_000, 10_000, undefined, binding.bindingId);
+    assert.equal(opened.conversationMode, "PERSISTENT_BOUND");
+    assert.equal(opened.bindingId, binding.bindingId);
+    assert.deepEqual(client.resumes, ["aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"]);
+    const completed = await bridge.complete(sessionId, nextPrompt());
+    assert.equal(completed.threadPreserved, "CONFIRMED");
+    assert.equal(completed.threadDeleted, "PENDING");
+    assert.deepEqual(client.deletes, []);
+    assert.equal(client.closeCalls, 1);
+  } finally { await store.removeRegistryFileForTests(); }
+});
+
+test("PERSISTENT_BOUND supports a second authorized session on the same binding", async () => {
+  const projectRoot = process.cwd();
+  const persistentConfig = { ...config, projectRoot };
+  const sessionTwo = "55555555-5555-4555-8555-555555555555";
+  const missionTwo = "66666666-6666-4666-8666-666666666666";
+  const reportTwo = "77777777-7777-4777-8777-777777777777";
+  const store = new BindingStore(join(tmpdir(), `chatcom-binding-test-${Date.now()}-${Math.random().toString(16).slice(2)}.json`));
+  const first = new FakeClient();
+  const second = new FakeClient(sessionTwo, missionTwo, reportTwo);
+  const clients = [first, second];
+  const binding = await store.create("FitMyLife repeat", projectRoot, "01a00f4c-9d87-79e2-9077-8d15191d32b5");
+  try {
+    const bridge = new WorkHostBridge({ createClient: async () => clients.shift() as FakeClient, randomUUID: () => sessionId, bindingStore: store });
+    await bridge.open(persistentConfig, mission(), 10_000, 10_000, undefined, binding.bindingId);
+    await bridge.complete(sessionId, nextPrompt());
+    const missionSecond = createMessageForTests({ session_id: sessionTwo, message_id: missionTwo, correlation_id: sessionTwo, sequence: 1, sender: "WORK_HOST", recipient: "CODEX_LOCAL", type: "MISSION", phase: config.phase, point: config.point, content: "Second authorized inspection.", user_action_needed: false });
+    const nextSecond = createMessageForTests({ session_id: sessionTwo, message_id: "88888888-8888-4888-8888-888888888888", correlation_id: reportTwo, sequence: 3, sender: "WORK_HOST", recipient: "CODEX_LOCAL", type: "NEXT_PROMPT", phase: config.phase, point: config.point, content: "Continue later.", user_action_needed: false });
+    await bridge.open(persistentConfig, missionSecond, 10_000, 10_000, undefined, binding.bindingId);
+    const completed = await bridge.complete(sessionTwo, nextSecond);
+    assert.equal(completed.threadPreserved, "CONFIRMED");
+    assert.deepEqual(first.deletes, []);
+    assert.deepEqual(second.deletes, []);
+    assert.deepEqual(first.resumes, ["01a00f4c-9d87-79e2-9077-8d15191d32b5"]);
+    assert.deepEqual(second.resumes, ["01a00f4c-9d87-79e2-9077-8d15191d32b5"]);
+  } finally { await store.removeRegistryFileForTests(); }
 });

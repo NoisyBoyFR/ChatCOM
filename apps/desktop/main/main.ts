@@ -12,6 +12,7 @@ import { translate } from "../../../src/desktop/i18n.js";
 import { DESKTOP_IPC_CHANNELS, type DesktopConfigureInput } from "../shared/ipc.js";
 import { CHATCOM_UPDATE_REPOSITORY, UpdaterController, evaluateUpdatePolicy, inspectWindowsAuthenticode, verifyArtifactHash, type ElectronUpdaterAdapter, type UpdateSnapshot } from "../../../src/desktop/updater.js";
 import { APPROVED_PUBLISHER_SUBJECT } from "../../../src/desktop/publisher.js";
+import { BindingStore } from "../../../src/desktop/bindings.js";
 
 const orchestrator = new ConversationOrchestrator();
 let mainWindow: BrowserWindow | undefined;
@@ -20,6 +21,7 @@ let selectedProjectRoot: string | undefined;
 let currentPreferences: DesktopPreferences = DEFAULT_PREFERENCES;
 let updater: UpdaterController | undefined;
 let updateSnapshot: UpdateSnapshot = { status: "DISABLED", currentVersion: "unknown", channel: "preview", readyToInstall: false, publicUpdatesEnabled: false, errorCode: "NOT_INITIALIZED" };
+let bindingStore: BindingStore | undefined;
 let currentPreflight: PreflightResult = {
   runtime: { status: "UNKNOWN" },
   authentication: { status: "UNKNOWN" },
@@ -36,6 +38,8 @@ function boundedError(error: unknown): Error {
   const code = error instanceof RelayFailure ? error.code : "DESKTOP_REQUEST_FAILED";
   return new Error(`CHATCOM_DESKTOP kind=FAILURE code=${code}`);
 }
+
+function requireBindingStore(): BindingStore { if (bindingStore === undefined) throw new RelayFailure("BINDING_STORE_UNAVAILABLE"); return bindingStore; }
 
 function requireInput(input: unknown): DesktopConfigureInput {
   if (typeof input !== "object" || input === null || Array.isArray(input)) throw new RelayFailure("IPC_INPUT_INVALID");
@@ -273,6 +277,20 @@ function registerIpc(): void {
     try { assertTrustedSender(event); try { await unlink(await preferencesPath()); } catch { /* absent is already reset */ } currentPreferences = migratePreferences(undefined, app.getLocale(), app.getVersion()); applyWindowPreferences(); updater?.setChannel(currentPreferences.updateChannel); updater?.setEnabled(currentPreferences.autoUpdateEnabled); }
     catch (error) { throw boundedError(error); }
   });
+  ipcMain.handle(DESKTOP_IPC_CHANNELS.listBindings, async (event) => { try { assertTrustedSender(event); return requireBindingStore().list(); } catch (error) { throw boundedError(error); } });
+  ipcMain.handle(DESKTOP_IPC_CHANNELS.createBinding, async (event, rawInput: unknown) => {
+    try {
+      assertTrustedSender(event);
+      if (typeof rawInput !== "object" || rawInput === null || Array.isArray(rawInput)) throw new RelayFailure("BINDING_INPUT_INVALID");
+      const value = rawInput as Record<string, unknown>;
+      if (Object.keys(value).length !== 3 || typeof value.alias !== "string" || typeof value.projectRoot !== "string" || typeof value.threadId !== "string") throw new RelayFailure("BINDING_INPUT_INVALID");
+      const project = await validateProject(value.projectRoot);
+      return await requireBindingStore().create(value.alias, project, value.threadId);
+    } catch (error) { throw boundedError(error); }
+  });
+  ipcMain.handle(DESKTOP_IPC_CHANNELS.validateBinding, async (event, bindingId: unknown, projectRoot?: unknown) => { try { assertTrustedSender(event); if (typeof bindingId !== "string" || (projectRoot !== undefined && typeof projectRoot !== "string")) throw new RelayFailure("BINDING_INPUT_INVALID"); return await requireBindingStore().validate(bindingId, projectRoot as string | undefined); } catch (error) { throw boundedError(error); } });
+  ipcMain.handle(DESKTOP_IPC_CHANNELS.disableBinding, async (event, bindingId: unknown) => { try { assertTrustedSender(event); if (typeof bindingId !== "string") throw new RelayFailure("BINDING_INPUT_INVALID"); await requireBindingStore().disable(bindingId); } catch (error) { throw boundedError(error); } });
+  ipcMain.handle(DESKTOP_IPC_CHANNELS.removeBinding, async (event, bindingId: unknown) => { try { assertTrustedSender(event); if (typeof bindingId !== "string") throw new RelayFailure("BINDING_INPUT_INVALID"); await requireBindingStore().remove(bindingId); } catch (error) { throw boundedError(error); } });
 }
 
 async function createWindow(): Promise<void> {
@@ -330,6 +348,7 @@ const squirrelLaunchHandled = handleSquirrelStartup();
 if (!squirrelLaunchHandled) app.whenReady().then(async () => {
   session.defaultSession.setPermissionRequestHandler((_webContents, _permission, callback) => callback(false));
   currentPreferences = await loadPreferences();
+  bindingStore = new BindingStore(join(app.getPath("userData"), "bindings.json"));
   selectedProjectRoot = currentPreferences.projectRoot;
   registerIpc();
   orchestrator.subscribe(sendEvent);

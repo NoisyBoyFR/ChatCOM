@@ -67,12 +67,23 @@ test("RC.5 Desktop exposes host, MCP, Codex, mode and cleanup status", async () 
   assert.match(html, /data-i18n="localSimulation"/u);
 });
 
+test("RC.6 Desktop exposes opt-in persistent binding controls without full thread ids", async () => {
+  const html = await readFile("apps/desktop/renderer/index.html", "utf8");
+  const renderer = await readFile("apps/desktop/renderer/renderer.ts", "utf8");
+  const ipc = await readFile("apps/desktop/shared/ipc.ts", "utf8");
+  for (const id of ["binding-alias", "binding-thread-id", "add-binding", "validate-binding", "binding-list"]) assert.match(html, new RegExp(`id="${id}"`, "u"));
+  assert.match(renderer, /bindingThreadId\.value = ""/u);
+  assert.match(renderer, /threadTail/u);
+  assert.doesNotMatch(renderer, /binding\.threadId/u);
+  for (const channel of ["listBindings", "createBinding", "validateBinding", "disableBinding", "removeBinding"]) assert.match(ipc, new RegExp(channel, "u"));
+});
+
 test("RC.3 artifact naming and manifest are constrained", async () => {
   const workflow = await readFile(".github/workflows/ci.yml", "utf8");
   const signingWorkflow = await readFile(".github/workflows/sign-windows.yml", "utf8");
   const signatureVerifier = await readFile("scripts/verify-windows-signature.ps1", "utf8");
   const verifier = await readFile("scripts/verify-desktop-package.mjs", "utf8");
-  assert.match(workflow, /chatcom-desktop-1\.0\.0-rc\.5-windows-x64-local-validation/u);
+  assert.match(workflow, /chatcom-desktop-1\.0\.0-rc\.6-windows-x64-local-validation/u);
   assert.match(workflow, /actions\/upload-artifact@[0-9a-f]{40}/u);
   for (const key of ["version", "platform", "architecture", "filename", "size", "sha256", "codexRuntimeVersion", "signature"]) assert.match(verifier, new RegExp(`${key}`, "u"));
   assert.match(verifier, /UNSIGNED/u);
@@ -83,7 +94,7 @@ test("RC.3 artifact naming and manifest are constrained", async () => {
   assert.match(signingWorkflow, /contents: read/u);
   assert.match(signingWorkflow, /signpath\/github-action-submit-signing-request@[0-9a-f]{40}/u);
   assert.match(signingWorkflow, /chatcom-desktop-\$\{\{ steps\.metadata\.outputs\.version \}\}-windows-x64-signpath-signed-validation/u);
-  assert.match(signingWorkflow, /SIGN_RC5/u);
+  assert.match(signingWorkflow, /SIGN_RC6/u);
   const obsoleteRelease = new RegExp(["RC", "4"].join("[.]?"), "u");
   const obsoleteConfirmation = new RegExp(["SIGN", "RC", "4"].join("_"), "u");
   assert.doesNotMatch(signingWorkflow, obsoleteRelease);

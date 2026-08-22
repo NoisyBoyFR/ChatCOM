@@ -70,6 +70,12 @@ class FakeCodex {
     this.threads.push(thread);
     return thread as unknown as Thread;
   }
+  resumeThread(id: string): Thread {
+    const thread = new FakeThread(() => this.outputs.shift() ?? "{}");
+    thread.id = id;
+    this.threads.push(thread);
+    return thread as unknown as Thread;
+  }
 }
 
 test("SDK adapter runs a thread without exposing SDK internals", async () => {
@@ -84,6 +90,16 @@ test("SDK adapter runs a thread without exposing SDK internals", async () => {
   assert.equal(thread.calls.length, 1);
   assert.equal(thread.calls[0].input.startsWith("WORK_LOCAL instructions\n\nprompt"), true);
   assert.equal((thread.calls[0].options as { outputSchema: unknown }).outputSchema !== undefined, true);
+});
+
+test("SDK adapter resumes an exact thread and supports preservation on close", async () => {
+  const codex = new FakeCodex([message]);
+  const client = await createCodexSdkRelayClient("C:\\synthetic", { codex });
+  const id = await client.resumeThread("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "C:\\synthetic");
+  assert.equal(await client.runTurn(id, "resume prompt", { type: "object" }), message);
+  assert.equal(codex.threads.length, 1);
+  assert.equal(codex.threads[0]?.calls[0]?.input, "resume prompt");
+  assert.deepEqual(await client.close({ preserveThreadIds: [id] }), { exited: true, forced: false });
 });
 
 test("SDK adapter converts a failed turn to a bounded diagnostic", async () => {

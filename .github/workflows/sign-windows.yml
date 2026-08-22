@@ -1,10 +1,10 @@
-name: Sign Windows RC.5
+name: Sign Windows RC.6
 
 on:
   workflow_dispatch:
     inputs:
       confirmation:
-        description: Type SIGN_RC5 to authorize one protected signing request
+        description: Type SIGN_RC6 to authorize one protected signing request
         required: true
         type: string
 
@@ -18,7 +18,7 @@ concurrency:
 
 jobs:
   sign-windows:
-    name: Sign and verify Windows RC.5 with SignPath
+    name: Sign and verify Windows RC.6 with SignPath
     runs-on: windows-2025
     environment: windows-code-signing
     steps:
@@ -34,7 +34,7 @@ jobs:
           SIGNPATH_ARTIFACT_CONFIGURATION_SLUG: ${{ vars.SIGNPATH_ARTIFACT_CONFIGURATION_SLUG }}
           SIGNPATH_PUBLISHER_SUBJECT: ${{ vars.SIGNPATH_PUBLISHER_SUBJECT }}
         run: |
-          if ($env:CHATCOM_CONFIRMATION -cne "SIGN_RC5") { throw "SIGNING_CONFIRMATION_INVALID" }
+          if ($env:CHATCOM_CONFIRMATION -cne "SIGN_RC6") { throw "SIGNING_CONFIRMATION_INVALID" }
           if ($env:CHATCOM_REF -cne "refs/heads/main") { throw "SIGNING_REF_INVALID" }
           $required = @(
             "SIGNPATH_API_TOKEN",
@@ -70,7 +70,7 @@ jobs:
         shell: pwsh
         run: |
           $package = Get-Content -Raw package.json | ConvertFrom-Json
-          if ($package.name -cne "chatcom" -or $package.version -notmatch '^1\.0\.0-rc\.5$') { throw "SIGNING_VERSION_INVALID" }
+          if ($package.name -cne "chatcom" -or $package.version -notmatch '^1\.0\.0-rc\.6$') { throw "SIGNING_VERSION_INVALID" }
           "version=$($package.version)" >> $env:GITHUB_OUTPUT
 
       - name: Set up Node.js

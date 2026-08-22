@@ -4,6 +4,7 @@ import { existsSync } from "node:fs";
 import { mkdtemp, readdir, readFile, realpath, rm, stat, unlink, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
+import { randomUUID } from "node:crypto";
 import { ConversationOrchestrator, type ConversationSnapshot } from "../../../src/conversation/orchestrator.js";
 import { RelayFailure } from "../../../src/local-relay.js";
 import { runDesktopPreflight, type PreflightResult } from "../../../src/desktop/preflight.js";
@@ -13,6 +14,9 @@ import { DESKTOP_IPC_CHANNELS, type DesktopConfigureInput } from "../shared/ipc.
 import { CHATCOM_UPDATE_REPOSITORY, UpdaterController, evaluateUpdatePolicy, inspectWindowsAuthenticode, verifyArtifactHash, type ElectronUpdaterAdapter, type UpdateSnapshot } from "../../../src/desktop/updater.js";
 import { APPROVED_PUBLISHER_SUBJECT } from "../../../src/desktop/publisher.js";
 import { BindingStore } from "../../../src/desktop/bindings.js";
+import { ConversationCatalog, createAppServerConversationClient } from "../../../src/desktop/conversation-catalog.js";
+import { ConversationPairStore, summarizeConversationPair } from "../../../src/desktop/conversation-pair.js";
+import { DualConversationDialogue, type DualDialogueInput } from "../../../src/desktop/dual-dialogue.js";
 
 const orchestrator = new ConversationOrchestrator();
 let mainWindow: BrowserWindow | undefined;
@@ -22,6 +26,10 @@ let currentPreferences: DesktopPreferences = DEFAULT_PREFERENCES;
 let updater: UpdaterController | undefined;
 let updateSnapshot: UpdateSnapshot = { status: "DISABLED", currentVersion: "unknown", channel: "preview", readyToInstall: false, publicUpdatesEnabled: false, errorCode: "NOT_INITIALIZED" };
 let bindingStore: BindingStore | undefined;
+const conversationCatalog = new ConversationCatalog();
+let conversationPairStore: ConversationPairStore | undefined;
+let dualDialogue: DualConversationDialogue | undefined;
+let dualProjectRoot: string | undefined;
 let currentPreflight: PreflightResult = {
   runtime: { status: "UNKNOWN" },
   authentication: { status: "UNKNOWN" },
@@ -40,6 +48,8 @@ function boundedError(error: unknown): Error {
 }
 
 function requireBindingStore(): BindingStore { if (bindingStore === undefined) throw new RelayFailure("BINDING_STORE_UNAVAILABLE"); return bindingStore; }
+function requireConversationPairStore(): ConversationPairStore { if (conversationPairStore === undefined) throw new RelayFailure("CONVERSATION_PAIR_STORE_UNAVAILABLE"); return conversationPairStore; }
+function sendDualEvent(event: import("../../../src/desktop/dual-dialogue.js").DualDialogueEvent): void { if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(DESKTOP_IPC_CHANNELS.dualEvent, event); }
 
 function requireInput(input: unknown): DesktopConfigureInput {
   if (typeof input !== "object" || input === null || Array.isArray(input)) throw new RelayFailure("IPC_INPUT_INVALID");
@@ -291,6 +301,44 @@ function registerIpc(): void {
   ipcMain.handle(DESKTOP_IPC_CHANNELS.validateBinding, async (event, bindingId: unknown, projectRoot?: unknown) => { try { assertTrustedSender(event); if (typeof bindingId !== "string" || (projectRoot !== undefined && typeof projectRoot !== "string")) throw new RelayFailure("BINDING_INPUT_INVALID"); return await requireBindingStore().validate(bindingId, projectRoot as string | undefined); } catch (error) { throw boundedError(error); } });
   ipcMain.handle(DESKTOP_IPC_CHANNELS.disableBinding, async (event, bindingId: unknown) => { try { assertTrustedSender(event); if (typeof bindingId !== "string") throw new RelayFailure("BINDING_INPUT_INVALID"); await requireBindingStore().disable(bindingId); } catch (error) { throw boundedError(error); } });
   ipcMain.handle(DESKTOP_IPC_CHANNELS.removeBinding, async (event, bindingId: unknown) => { try { assertTrustedSender(event); if (typeof bindingId !== "string") throw new RelayFailure("BINDING_INPUT_INVALID"); await requireBindingStore().remove(bindingId); } catch (error) { throw boundedError(error); } });
+  ipcMain.handle(DESKTOP_IPC_CHANNELS.discoverConversations, async (event, rawInput: unknown) => {
+    try {
+      assertTrustedSender(event);
+      if (rawInput !== undefined && (typeof rawInput !== "object" || rawInput === null || Array.isArray(rawInput))) throw new RelayFailure("CONVERSATION_DISCOVERY_INPUT_INVALID");
+      const value = (rawInput ?? {}) as Record<string, unknown>;
+      if (Object.keys(value).some((key) => !["projectRoot", "searchTerm"].includes(key)) || (value.projectRoot !== undefined && typeof value.projectRoot !== "string") || (value.searchTerm !== undefined && typeof value.searchTerm !== "string")) throw new RelayFailure("CONVERSATION_DISCOVERY_INPUT_INVALID");
+      return await conversationCatalog.discover({ projectRoot: value.projectRoot as string | undefined, searchTerm: value.searchTerm as string | undefined });
+    } catch (error) { throw boundedError(error); }
+  });
+  ipcMain.handle(DESKTOP_IPC_CHANNELS.saveConversationPair, async (event, rawInput: unknown) => {
+    try {
+      assertTrustedSender(event);
+      if (typeof rawInput !== "object" || rawInput === null || Array.isArray(rawInput)) throw new RelayFailure("CONVERSATION_PAIR_INPUT_INVALID");
+      const value = rawInput as Record<string, unknown>;
+      const required = ["workHandle", "codexHandle", "projectRoot", "phase", "point", "objective", "firstSpeaker", "maxCycles", "cycleTimeoutMs"];
+      if (Object.keys(value).length !== required.length || required.some((key) => !Object.prototype.hasOwnProperty.call(value, key))) throw new RelayFailure("CONVERSATION_PAIR_INPUT_INVALID");
+      if (!["workHandle", "codexHandle", "projectRoot", "phase", "point", "objective"].every((key) => typeof value[key] === "string") || !["WORK", "CODEX"].includes(String(value.firstSpeaker)) || typeof value.maxCycles !== "number" || !Number.isSafeInteger(value.maxCycles) || value.maxCycles < 1 || value.maxCycles > 10 || typeof value.cycleTimeoutMs !== "number" || !Number.isSafeInteger(value.cycleTimeoutMs) || value.cycleTimeoutMs <= 0) throw new RelayFailure("CONVERSATION_PAIR_INPUT_INVALID");
+      const canonicalProject = await validateProject(value.projectRoot as string);
+      const selected = conversationCatalog.selectPair(value.workHandle as string, value.codexHandle as string);
+      if (selected.work.projectRoot !== "UNKNOWN" && selected.codex.projectRoot !== "UNKNOWN" && selected.work.projectRoot !== selected.codex.projectRoot) throw new RelayFailure("PROJECTS_DIFFERENT");
+      if (selected.work.projectRoot !== "UNKNOWN" && selected.work.projectRoot !== canonicalProject) throw new RelayFailure("WORK_PROJECT_MISMATCH");
+      const work = conversationCatalog.getSelected(value.workHandle as string);
+      const codex = conversationCatalog.getSelected(value.codexHandle as string);
+      const pair = { version: 1 as const, workThreadId: work.id, codexThreadId: codex.id, workProjectRoot: selected.work.projectRoot, codexProjectRoot: selected.codex.projectRoot, workTitle: selected.work.title, codexTitle: selected.codex.title, firstSpeaker: value.firstSpeaker as "WORK" | "CODEX", objective: value.objective as string, maxCycles: value.maxCycles as number, phase: value.phase as string, point: value.point as string, cycleTimeoutMs: value.cycleTimeoutMs as number };
+      await requireConversationPairStore().write(pair);
+      dualProjectRoot = canonicalProject;
+      const input: DualDialogueInput = { workThreadId: pair.workThreadId, codexThreadId: pair.codexThreadId, projectRoot: canonicalProject, phase: value.phase as string, point: value.point as string, objective: pair.objective, firstSpeaker: pair.firstSpeaker, maxCycles: pair.maxCycles, cycleTimeoutMs: value.cycleTimeoutMs as number };
+      dualDialogue = new DualConversationDialogue(input, { createClient: createAppServerConversationClient, randomUUID });
+      dualDialogue.subscribe(sendDualEvent);
+      return { pair: summarizeConversationPair(pair), snapshot: dualDialogue.snapshot() };
+    } catch (error) { throw boundedError(error); }
+  });
+  ipcMain.handle(DESKTOP_IPC_CHANNELS.getConversationPair, async (event) => { try { assertTrustedSender(event); const pair = await requireConversationPairStore().read(); return pair === undefined ? undefined : summarizeConversationPair(pair); } catch (error) { throw boundedError(error); } });
+  ipcMain.handle(DESKTOP_IPC_CHANNELS.clearConversationPair, async (event) => { try { assertTrustedSender(event); await requireConversationPairStore().clear(); dualDialogue = undefined; dualProjectRoot = undefined; } catch (error) { throw boundedError(error); } });
+  ipcMain.handle(DESKTOP_IPC_CHANNELS.startDualDialogue, async (event) => { try { assertTrustedSender(event); if (!dualDialogue || dualProjectRoot === undefined) throw new RelayFailure("CONVERSATION_PAIR_REQUIRED"); const preflight = await runDesktopPreflight(dualProjectRoot); if (!preflight.canStart) throw new RelayFailure("PREFLIGHT_REQUIRED"); void dualDialogue.start().catch(() => undefined); return dualDialogue.snapshot(); } catch (error) { throw boundedError(error); } });
+  ipcMain.handle(DESKTOP_IPC_CHANNELS.pauseDualDialogue, async (event) => { try { assertTrustedSender(event); if (!dualDialogue) throw new RelayFailure("CONVERSATION_PAIR_REQUIRED"); dualDialogue.requestPause(); return dualDialogue.snapshot(); } catch (error) { throw boundedError(error); } });
+  ipcMain.handle(DESKTOP_IPC_CHANNELS.resumeDualDialogue, async (event) => { try { assertTrustedSender(event); if (!dualDialogue) throw new RelayFailure("CONVERSATION_PAIR_REQUIRED"); void dualDialogue.resume().catch(() => undefined); return dualDialogue.snapshot(); } catch (error) { throw boundedError(error); } });
+  ipcMain.handle(DESKTOP_IPC_CHANNELS.stopDualDialogue, async (event) => { try { assertTrustedSender(event); if (!dualDialogue) throw new RelayFailure("CONVERSATION_PAIR_REQUIRED"); void dualDialogue.stop().catch(() => undefined); return dualDialogue.snapshot(); } catch (error) { throw boundedError(error); } });
 }
 
 async function createWindow(): Promise<void> {
@@ -322,12 +370,14 @@ async function createWindow(): Promise<void> {
   });
   mainWindow.on("close", (event) => {
     if (closing) return;
-    if (!["RUNNING", "PAUSE_REQUESTED", "STOPPING"].includes(orchestrator.snapshot().state)) return;
+    const dualRunning = dualDialogue !== undefined && ["RUNNING", "PAUSE_REQUESTED", "STOPPING"].includes(dualDialogue.snapshot().state);
+    if (!["RUNNING", "PAUSE_REQUESTED", "STOPPING"].includes(orchestrator.snapshot().state) && !dualRunning) return;
     event.preventDefault();
     void dialog.showMessageBox(mainWindow as BrowserWindow, { type: "warning", buttons: [translate(currentPreferences.language, "cancel"), translate(currentPreferences.language, "stopAndQuit")], defaultId: 0, cancelId: 0, title: translate(currentPreferences.language, "relayState"), message: translate(currentPreferences.language, "closeWhileRunning") }).then(async (answer) => {
       if (answer.response !== 1) return;
       closing = true;
       await orchestrator.stop();
+      if (dualDialogue) await dualDialogue.stop();
       mainWindow?.destroy();
     });
   });
@@ -349,6 +399,13 @@ if (!squirrelLaunchHandled) app.whenReady().then(async () => {
   session.defaultSession.setPermissionRequestHandler((_webContents, _permission, callback) => callback(false));
   currentPreferences = await loadPreferences();
   bindingStore = new BindingStore(join(app.getPath("userData"), "bindings.json"));
+  conversationPairStore = new ConversationPairStore(join(app.getPath("userData"), "conversation-pair.json"));
+  const restoredPair = await conversationPairStore.read();
+  if (restoredPair !== undefined && restoredPair.workProjectRoot !== "UNKNOWN") {
+    dualProjectRoot = restoredPair.workProjectRoot;
+    dualDialogue = new DualConversationDialogue({ workThreadId: restoredPair.workThreadId, codexThreadId: restoredPair.codexThreadId, projectRoot: restoredPair.workProjectRoot, phase: restoredPair.phase, point: restoredPair.point, objective: restoredPair.objective, firstSpeaker: restoredPair.firstSpeaker, maxCycles: restoredPair.maxCycles, cycleTimeoutMs: restoredPair.cycleTimeoutMs }, { createClient: createAppServerConversationClient, randomUUID });
+    dualDialogue.subscribe(sendDualEvent);
+  }
   selectedProjectRoot = currentPreferences.projectRoot;
   registerIpc();
   orchestrator.subscribe(sendEvent);

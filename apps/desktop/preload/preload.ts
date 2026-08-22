@@ -3,6 +3,7 @@ import { DESKTOP_IPC_CHANNELS, type DesktopApi, type DesktopConfigureInput, type
 import type { DesktopPreferences } from "../../../src/desktop/preferences.js";
 import type { UpdateSnapshot } from "../../../src/desktop/updater.js";
 import type { ConversationEvent, ConversationSnapshot } from "../../../src/conversation/orchestrator.js";
+import type { DualDialogueEvent } from "../../../src/desktop/dual-dialogue.js";
 import type { PreflightResult } from "../../../src/desktop/preflight.js";
 
 const api: DesktopApi = Object.freeze({
@@ -37,6 +38,19 @@ const api: DesktopApi = Object.freeze({
   validateBinding: (bindingId: string, projectRoot?: string) => ipcRenderer.invoke(DESKTOP_IPC_CHANNELS.validateBinding, bindingId, projectRoot),
   disableBinding: (bindingId: string) => ipcRenderer.invoke(DESKTOP_IPC_CHANNELS.disableBinding, bindingId),
   removeBinding: (bindingId: string) => ipcRenderer.invoke(DESKTOP_IPC_CHANNELS.removeBinding, bindingId),
+  discoverConversations: (input?: unknown) => ipcRenderer.invoke(DESKTOP_IPC_CHANNELS.discoverConversations, input),
+  saveConversationPair: (input: unknown) => ipcRenderer.invoke(DESKTOP_IPC_CHANNELS.saveConversationPair, input),
+  getConversationPair: () => ipcRenderer.invoke(DESKTOP_IPC_CHANNELS.getConversationPair),
+  clearConversationPair: () => ipcRenderer.invoke(DESKTOP_IPC_CHANNELS.clearConversationPair),
+  startDualDialogue: () => ipcRenderer.invoke(DESKTOP_IPC_CHANNELS.startDualDialogue),
+  pauseDualDialogue: () => ipcRenderer.invoke(DESKTOP_IPC_CHANNELS.pauseDualDialogue),
+  resumeDualDialogue: () => ipcRenderer.invoke(DESKTOP_IPC_CHANNELS.resumeDualDialogue),
+  stopDualDialogue: () => ipcRenderer.invoke(DESKTOP_IPC_CHANNELS.stopDualDialogue),
+  onDualEvent: (listener: (event: DualDialogueEvent) => void) => {
+    const wrapped = (_event: Electron.IpcRendererEvent, value: DualDialogueEvent) => listener(value);
+    ipcRenderer.on(DESKTOP_IPC_CHANNELS.dualEvent, wrapped);
+    return () => ipcRenderer.removeListener(DESKTOP_IPC_CHANNELS.dualEvent, wrapped);
+  },
 });
 
 contextBridge.exposeInMainWorld("chatcomDesktop", api);

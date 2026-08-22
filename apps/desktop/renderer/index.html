@@ -10,6 +10,44 @@
   <body>
     <header class="topbar"><div><p class="eyebrow" data-i18n="eyebrow"></p><h1 data-i18n="headline"></h1><p class="subtle" data-i18n="subtitle"></p></div><div class="topbar-actions"><button id="open-settings" class="ghost" data-i18n="settings"></button><div id="state-badge" class="badge">IDLE</div></div></header>
     <main class="layout">
+      <section class="panel dual-dialogue-panel" aria-labelledby="dual-dialogue-title">
+        <h2 id="dual-dialogue-title" data-i18n="dualSection"></h2>
+        <p class="subtle" data-i18n="dualInstruction"></p>
+        <div class="dual-toolbar">
+          <input id="conversation-search" type="search" data-i18n-placeholder="searchConversations" aria-label="Search conversations" />
+          <input id="conversation-project-filter" type="text" data-i18n-placeholder="projectFilter" aria-label="Project filter" />
+          <button id="refresh-conversations" class="secondary" data-i18n="refreshConversations"></button>
+        </div>
+        <div class="dual-grid">
+          <article class="conversation-card" aria-labelledby="work-conversation-title">
+            <h3 id="work-conversation-title" data-i18n="conversationWork"></h3>
+            <select id="work-conversation" class="conversation-list" size="7" aria-label="WORK conversation"></select>
+            <p id="work-selected" class="help" data-i18n="noConversations"></p>
+          </article>
+          <article class="conversation-card" aria-labelledby="codex-conversation-title">
+            <h3 id="codex-conversation-title" data-i18n="conversationCodex"></h3>
+            <select id="codex-conversation" class="conversation-list" size="7" aria-label="CODEX conversation"></select>
+            <p id="codex-selected" class="help" data-i18n="noConversations"></p>
+          </article>
+        </div>
+        <div class="dual-controls">
+          <div class="field"><label for="first-speaker" data-i18n="firstSpeaker"></label><select id="first-speaker"><option value="WORK" data-i18n="workStarts"></option><option value="CODEX" data-i18n="codexStarts"></option></select></div>
+          <div class="field"><label for="dual-objective" data-i18n="initialObjective"></label><textarea id="dual-objective" rows="3" maxlength="4096" data-i18n-placeholder="initialObjectivePlaceholder"></textarea></div>
+          <div class="field"><label for="dual-max-cycles" data-i18n="dualMaxCycles"></label><input id="dual-max-cycles" type="number" min="1" max="10" value="3" /></div>
+        </div>
+        <p id="dual-pair-status" class="hint" role="status"></p>
+        <p class="notice" data-i18n="dualReadOnly"></p>
+        <div class="actions">
+          <button id="save-conversation-pair" class="secondary" data-i18n="dualSavedPair"></button>
+          <button id="dual-start" class="primary" data-i18n="dualStart" disabled></button>
+          <button id="dual-pause" class="secondary" data-i18n="dualPause" disabled></button>
+          <button id="dual-resume" class="secondary" data-i18n="dualResume" disabled></button>
+          <button id="dual-stop" class="danger" data-i18n="dualStop" disabled></button>
+          <button id="dual-clear" class="ghost" data-i18n="dualClear"></button>
+        </div>
+        <dl class="dual-status"><div><dt data-i18n="dualStatus"></dt><dd id="dual-state">IDLE</dd></div><div><dt data-i18n="cycle"></dt><dd id="dual-cycle">0 / 3</dd></div></dl>
+        <div id="dual-timeline" class="timeline" aria-live="polite"></div>
+      </section>
       <section class="panel configuration" aria-labelledby="configuration-title">
         <h2 id="configuration-title" data-i18n="configuration"></h2>
         <div class="field"><label for="project-root"><span data-i18n="project"></span> <span class="required" data-i18n="required"></span></label><input id="project-root" type="text" readonly data-i18n-placeholder="projectPlaceholder" aria-required="true" /><button id="choose-project" class="secondary" data-i18n="chooseProject"></button><p class="help" data-i18n="projectBeginner"></p><p id="project-error" class="field-error" role="alert"></p></div>
@@ -28,7 +66,7 @@
       <section class="panel overview" aria-labelledby="overview-title"><h2 id="overview-title" data-i18n="relayState"></h2><dl class="facts"><div><dt data-i18n="conversation"></dt><dd id="conversation-id">—</dd></div><div><dt data-i18n="cycle"></dt><dd id="cycle">0 / 5</dd></div><div><dt data-i18n="elapsed"></dt><dd id="elapsed">0 s</dd></div><div><dt data-i18n="cleanup"></dt><dd id="cleanup">UNKNOWN</dd></div><div><dt data-i18n="session"></dt><dd id="session-id">—</dd></div></dl><div class="notice" data-i18n="notice"></div><h2 class="timeline-title" data-i18n="timeline"></h2><div id="timeline" class="timeline" aria-live="polite"></div></section>
     </main>
     <section id="settings-panel" class="settings-panel" hidden role="dialog" aria-modal="true" aria-labelledby="settings-title" aria-describedby="settings-status"><div class="settings-card" tabindex="-1"><div class="settings-heading"><h2 id="settings-title" data-i18n="settings"></h2></div><div class="settings-grid"><label for="language" data-i18n="language"></label><select id="language"><option value="fr-FR">Fran&#231;ais</option><option value="en-US">English</option><option value="zh-CN">&#31616;&#20307;&#20013;&#25991;</option><option value="ru-RU">&#1056;&#1091;&#1089;&#1089;&#1082;&#1080;&#1081;</option></select><label for="theme" data-i18n="theme"></label><select id="theme"><option value="system" data-i18n="themeSystem"></option><option value="light" data-i18n="themeLight"></option><option value="dark" data-i18n="themeDark"></option></select><label for="window-mode" data-i18n="windowMode"></label><select id="window-mode"><option value="normal" data-i18n="windowNormal"></option><option value="maximized" data-i18n="windowMaximized"></option><option value="fullscreen" data-i18n="windowFullscreen"></option></select><label for="text-size" data-i18n="textSize"></label><select id="text-size"><option value="small" data-i18n="textSmall"></option><option value="normal" data-i18n="textNormal"></option><option value="large" data-i18n="textLarge"></option></select><label class="check"><input id="reduce-motion" type="checkbox" /><span data-i18n="reduceMotion"></span></label><label class="check"><input id="auto-scroll" type="checkbox" /><span data-i18n="autoScroll"></span></label><label class="check"><input id="auto-update" type="checkbox" /><span data-i18n="autoUpdate"></span></label><label for="update-channel" data-i18n="updateChannel"></label><select id="update-channel"><option value="stable" data-i18n="updateStable"></option><option value="preview" data-i18n="updatePreview"></option></select></div><div class="update-status"><span data-i18n="updateStatus"></span>: <strong id="update-state">DISABLED</strong><button id="check-updates" class="ghost" data-i18n="checkUpdates"></button><button id="restart-update" class="primary" data-i18n="restartUpdate" hidden></button></div><p id="settings-status" class="hint" role="status" aria-live="polite"></p><div class="settings-actions"><button id="save-settings" class="primary" data-i18n="settingsSave"></button><button id="cancel-settings" class="secondary" data-i18n="settingsCancel"></button></div></div></section>
-    <footer><span id="footer-status"></span><span>ChatCOM Desktop 1.0.0-rc.6</span></footer>
+    <footer><span id="footer-status"></span><span>ChatCOM Desktop 1.0.0-rc.7</span></footer>
     <script type="module" src="./renderer.ts"></script>
   </body>
 </html>

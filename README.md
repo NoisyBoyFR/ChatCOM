@@ -11,7 +11,7 @@
 
 [![Download ChatCOM Desktop](https://img.shields.io/badge/Download-ChatCOM_Desktop_for_Windows-0078D4?style=for-the-badge&logo=windows11&logoColor=white)](https://github.com/NoisyBoyFR/ChatCOM/releases/download/v1.0.0-rc.3/ChatCOM-Desktop-1.0.0-rc.3-Setup.exe)
 
-**Current source candidate:** `1.0.0-rc.6` · Windows x64 · the protected Artifact Signing workflow is ready, but public updates remain disabled until the external identity and certificate profile are configured
+**Current source candidate:** `1.0.0-rc.7` · Windows x64 · two existing Codex conversations can be selected for a bounded read-only dialogue; public updates remain disabled until the external identity and certificate profile are configured
 
 ## RC.6 publication and signing gate
 
@@ -62,6 +62,7 @@ The `WORK_HOST` route is the only route eligible for a real WORK ↔ Codex proof
 - bounded diagnostics without prompts, responses, credentials, thread IDs, or stacks.
 - Desktop communication status distinguishes `WORK_HOST`, `CODEX_LOCAL`, `USER`, `REAL_WORK_HOST`, and `LOCAL_SIMULATION`.
 - RC.6 supports an explicit temporary conversation or an exact local Codex binding; bound conversations are resumed by UUID and preserved after cleanup. See [persistent bindings](PERSISTENT-BINDINGS.md).
+- RC.7 discovers two existing Codex App Server conversations, labels them WORK/CODEX, resumes the exact threads in a bounded read-only dialogue, and restores the pair without auto-start. See [the two-conversation dialogue](DUAL-CONVERSATION-DIALOGUE.md).
 
 ## Download and install on Windows
 
@@ -141,7 +142,7 @@ npm run desktop:make
 The expected installer is:
 
 ```text
-out-desktop/make/squirrel.windows/x64/ChatCOM-Desktop-1.0.0-rc.6-Setup.exe
+out-desktop/make/squirrel.windows/x64/ChatCOM-Desktop-1.0.0-rc.7-Setup.exe
 ```
 
 `npm run verify` performs the build, core and Desktop typechecks, deterministic tests, example configuration validation, production dependency audit, and npm package dry-run. Diagnostic commands may contact a real Codex runtime and require explicit authorization.

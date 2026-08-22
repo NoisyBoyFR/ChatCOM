@@ -33,7 +33,7 @@ if (!rootPath || !manifestPath) {
     const manifest = JSON.parse(await readFile(manifestFile, "utf8"));
     if (manifest.channel !== "preview" || manifest.platform !== "windows" || manifest.architecture !== "x64") throw new Error("platform");
     if (typeof manifest.version !== "string" || !/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/u.test(manifest.version)) throw new Error("version");
-    if (manifest.signatureState !== "SIGNED" || manifest.signature !== "SIGNED" || manifest.timestamped !== true || !safePublisher(manifest.publisher)) throw new Error("signature-required");
+    if (manifest.signatureState !== "SIGNED" || manifest.signature !== "SIGNED" || manifest.timestamped !== true || !safePublisher(manifest.publisher) || !safePublisher(manifest.approvedPublisherSubject) || manifest.publisher !== manifest.approvedPublisherSubject) throw new Error("signature-required");
     if (!Array.isArray(manifest.artifacts) || manifest.artifacts.length !== 3) throw new Error("artifacts");
     const kinds = new Set();
     for (const artifact of manifest.artifacts) {

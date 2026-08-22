@@ -1,7 +1,8 @@
 const path = require("node:path");
 const fs = require("node:fs");
+const packageMetadata = require("./package.json");
 
-const nativeRuntimeRelativePath = path.join("resources", "@openai", "codex-win32-x64", "vendor", "x86_64-pc-windows-msvc", "bin", "codex.exe");
+const nativeRuntimeRelativePath = path.join("resources", "app.asar.unpacked", "node_modules", "@openai", "codex-win32-x64", "vendor", "x86_64-pc-windows-msvc", "bin", "codex.exe");
 
 module.exports = {
   outDir: process.env.CHATCOM_OUT_DIR || "out-desktop",
@@ -10,7 +11,6 @@ module.exports = {
     asar: {
       unpack: "**/node_modules/@openai/codex*/**",
     },
-    extraResource: [path.resolve(__dirname, "node_modules/@openai")],
     executableName: "ChatCOM",
     name: "ChatCOM",
     appBundleId: "com.noisyboyfr.chatcom",
@@ -31,9 +31,7 @@ module.exports = {
         return;
       }
 
-      const packagedRuntimeFound = outputPaths.some((outputPath) =>
-        fs.existsSync(path.join(outputPath, nativeRuntimeRelativePath)),
-      );
+      const packagedRuntimeFound = outputPaths.some((outputPath) => fs.existsSync(path.join(outputPath, nativeRuntimeRelativePath)));
       if (!packagedRuntimeFound) {
         throw new Error("CHATCOM_DESKTOP_RUNTIME_MISSING");
       }
@@ -45,7 +43,7 @@ module.exports = {
       name: "@electron-forge/maker-squirrel",
       config: {
         name: "chatcom",
-        setupExe: "ChatCOM-Desktop-1.0.0-rc.5-Setup.exe",
+        setupExe: `ChatCOM-Desktop-${packageMetadata.version}-Setup.exe`,
         noMsi: true,
       },
     },

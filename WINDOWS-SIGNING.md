@@ -38,9 +38,18 @@ has only `actions: read` and `contents: read` permissions. It checks the
 repository origin, runs `npm run verify`, builds the Squirrel package, uploads
 the input as a temporary GitHub artifact, submits one SignPath request with the
 pinned official action, downloads the result, and independently checks
-`ChatCOM.exe` and the final Setup with Authenticode, the configured publisher subject, and RFC 3161
-timestamp validation. It then emits `desktop-build-manifest.json` and
+`ChatCOM.exe` and the final Setup with Authenticode, the configured publisher
+subject, and RFC 3161 timestamp validation. The public subject is injected
+before the signed build and embedded immutably in the Desktop main bundle; the
+manifest records it separately so the updater can compare all three identities
+exactly. It then emits `desktop-build-manifest.json` and
 `SHA256SUMS.txt` with `signatureState: SIGNED`.
+
+The unsigned input build is deterministic: the targeted output directory is
+cleaned and recreated safely, the package is checked for exactly one
+`codex.exe`, and recursively included output directories are rejected. The
+unsigned local validation package is not an update feed and keeps automatic
+updates disabled.
 
 The workflow cannot create a branch, tag, Release, public update feed, or npm
 publication. A failed, unsigned, or unverified result is validation-only and

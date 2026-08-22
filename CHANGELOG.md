@@ -33,6 +33,8 @@ All notable ChatCOM changes are recorded in this file. Dates use the ISO `YYYY-M
 ### Distribution
 
 - No tag, GitHub Release, GitHub Pages deployment, unsigned public update, or npm publication was created for RC.5.
+- The signature and packaging guard embeds only the externally supplied public publisher subject, compares it exactly across binary, manifest, and bundle, and keeps updates disabled when it is absent or inconsistent.
+- Fresh isolated Windows builds are deterministic in structure: Setup `279708160` bytes, full Squirrel package `279442587` bytes, one `codex.exe` of `297362224` bytes, and no recursively included output directory. The prior `410684928`-byte Setup had both a duplicated `resources/@openai` runtime tree and packaging residue.
 
 ## [1.0.0-rc.3] - 2026-08-21
 

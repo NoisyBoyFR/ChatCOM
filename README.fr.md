@@ -75,9 +75,18 @@ effectuer par le propriétaire dans GitHub sont décrits dans
 artefact temporaire signé et ne peut créer ni tag ni Release.
 
 Le nom du produit est `ChatCOM` ; l’éditeur Authenticode est le sujet exact
-attribué ultérieurement par SignPath et n’est jamais deviné ni codé en dur. Le
-validateur local du canal Préversion refuse toute activation tant que le
-manifeste n’est pas `SIGNED`, horodaté, haché et associé à ce sujet configuré.
+attribué ultérieurement par SignPath et n’est jamais deviné ni codé en dur.
+Lors d’un futur build signé, `SIGNPATH_PUBLISHER_SUBJECT` est fourni comme
+entrée publique du build puis intégré de manière immuable dans le bundle
+principal Desktop. L’updater compare exactement cette valeur embarquée avec le
+sujet du binaire installé et l’éditeur du manifeste ; toute valeur absente,
+malformée ou différente désactive les mises à jour. Le validateur local du
+canal Préversion refuse toute activation tant que le manifeste n’est pas
+`SIGNED`, horodaté, haché et associé au même sujet configuré.
+
+Le packaging Desktop commence dans un dossier de sortie ciblé et vérifié. Le
+paquet contient exactement un `codex.exe` ; l’ancienne copie
+`resources/@openai` dupliquée à côté du runtime décompressé n’est plus ajoutée.
 
 Les informations de build lisibles par machine se trouvent dans [desktop-build-manifest.json](https://github.com/NoisyBoyFR/ChatCOM/releases/download/v1.0.0-rc.3/desktop-build-manifest.json).
 

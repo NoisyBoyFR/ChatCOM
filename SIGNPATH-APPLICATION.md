@@ -60,8 +60,11 @@ GitHub environment (not in Git):
 - `SIGNPATH_PUBLISHER_SUBJECT` variable.
 
 No value is invented in this repository because these identifiers and the
-certificate subject are assigned externally by SignPath. The application and
-approval status must be recorded before a real signing request is authorized.
+certificate subject are assigned externally by SignPath. The subject is supplied
+only as public input to the signed build, embedded immutably in the Desktop
+main bundle, and compared exactly with both the installed Authenticode subject
+and the manifest publisher. The application and approval status must be
+recorded before a real signing request is authorized.
 
 Official starting points:
 

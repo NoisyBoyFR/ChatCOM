@@ -3,6 +3,9 @@ import { createHash } from "node:crypto";
 import { resolve } from "node:path";
 import test from "node:test";
 import { buildUpdateFeedUrl, compareVersions, evaluateUpdatePolicy, isOfficialUpdateFeedUrl, UpdaterController, validateUpdateManifest, verifyArtifactHash, type ElectronUpdaterAdapter } from "../desktop/updater.js";
+import { normalizeApprovedPublisherSubject } from "../desktop/publisher.js";
+
+const APPROVED_PUBLISHER = "CN=Approved Test Publisher";
 
 class FakeUpdater implements ElectronUpdaterAdapter {
   feedUrl = "";
@@ -18,12 +21,24 @@ class FakeUpdater implements ElectronUpdaterAdapter {
 }
 
 test("update policy fails closed for unsigned, development, wrong-source and missing-publisher builds", () => {
-  const base = { packaged: true, platform: "win32", architecture: "x64", currentVersion: "1.0.0-rc.5", channel: "preview" as const, signatureState: "SIGNED" as const, publisher: "CN=SignPath Foundation", timestamped: true, repository: "NoisyBoyFR/ChatCOM", minimumUpdaterVersion: "1.0.0" };
+  const base = { packaged: true, platform: "win32", architecture: "x64", currentVersion: "1.0.0-rc.5", channel: "preview" as const, signatureState: "SIGNED" as const, publisher: APPROVED_PUBLISHER, approvedPublisherSubject: APPROVED_PUBLISHER, timestamped: true, repository: "NoisyBoyFR/ChatCOM", minimumUpdaterVersion: "1.0.0" };
   assert.deepEqual(evaluateUpdatePolicy({ ...base, signatureState: "UNSIGNED" }), { enabled: false, reason: "SIGNATURE_REQUIRED" });
   assert.deepEqual(evaluateUpdatePolicy({ ...base, packaged: false }), { enabled: false, reason: "DEVELOPMENT_BUILD" });
   assert.deepEqual(evaluateUpdatePolicy({ ...base, repository: "other/repo" }), { enabled: false, reason: "UPDATE_SOURCE_INVALID" });
   assert.deepEqual(evaluateUpdatePolicy({ ...base, publisher: "UNKNOWN" }), { enabled: false, reason: "PUBLISHER_INVALID" });
   assert.deepEqual(evaluateUpdatePolicy(base), { enabled: true, reason: "READY" });
+  assert.deepEqual(evaluateUpdatePolicy({ ...base, approvedPublisherSubject: undefined }), { enabled: false, reason: "PUBLISHER_APPROVED_MISSING" });
+  assert.deepEqual(evaluateUpdatePolicy({ ...base, approvedPublisherSubject: "CN=Other Publisher" }), { enabled: false, reason: "PUBLISHER_MISMATCH" });
+  assert.deepEqual(evaluateUpdatePolicy({ ...base, approvedPublisherSubject: " CN=Approved Test Publisher" }), { enabled: false, reason: "PUBLISHER_APPROVED_MISSING" });
+  assert.deepEqual(evaluateUpdatePolicy({ ...base, publisher: "CN=Other Publisher" }), { enabled: false, reason: "PUBLISHER_MISMATCH" });
+});
+
+test("approved publisher subjects are bounded and preserve exact identity", () => {
+  assert.equal(normalizeApprovedPublisherSubject(APPROVED_PUBLISHER), APPROVED_PUBLISHER);
+  assert.equal(normalizeApprovedPublisherSubject(""), undefined);
+  assert.equal(normalizeApprovedPublisherSubject("UNKNOWN"), undefined);
+  assert.equal(normalizeApprovedPublisherSubject(`${APPROVED_PUBLISHER}\n`), undefined);
+  assert.equal(normalizeApprovedPublisherSubject("x".repeat(513)), undefined);
 });
 
 test("version ordering rejects downgrades and constructs the official feed", () => {
@@ -39,16 +54,20 @@ test("version ordering rejects downgrades and constructs the official feed", () 
 });
 
 test("manifest validation requires the exact signed Windows Squirrel artifact set", () => {
-  const manifest = { version: "1.0.0-rc.6", channel: "preview", platform: "windows", architecture: "x64", publisher: "CN=SignPath Foundation", timestamped: true, minimumUpdaterVersion: "1.0.0", signatureState: "SIGNED", artifacts: [
+  const manifest = { version: "1.0.0-rc.6", channel: "preview", platform: "windows", architecture: "x64", publisher: APPROVED_PUBLISHER, approvedPublisherSubject: APPROVED_PUBLISHER, timestamped: true, minimumUpdaterVersion: "1.0.0", signatureState: "SIGNED", artifacts: [
     { filename: "ChatCOM-Setup.exe", size: 10, sha256: "a".repeat(64), kind: "setup" },
     { filename: "chatcom-full.nupkg", size: 20, sha256: "b".repeat(64), kind: "squirrel-full" },
     { filename: "RELEASES", size: 30, sha256: "c".repeat(64), kind: "squirrel-releases" },
   ] };
-  assert.deepEqual(validateUpdateManifest(manifest, { currentVersion: "1.0.0-rc.5", channel: "preview" }), { enabled: true, reason: "READY" });
-  assert.deepEqual(validateUpdateManifest({ ...manifest, signatureState: "UNSIGNED" }, { currentVersion: "1.0.0-rc.5", channel: "preview" }), { enabled: false, reason: "SIGNATURE_INVALID" });
-  assert.deepEqual(validateUpdateManifest({ ...manifest, publisher: "UNKNOWN" }, { currentVersion: "1.0.0-rc.5", channel: "preview" }), { enabled: false, reason: "SIGNATURE_INVALID" });
-  assert.deepEqual(validateUpdateManifest({ ...manifest, artifacts: manifest.artifacts.slice(0, 2) }, { currentVersion: "1.0.0-rc.5", channel: "preview" }), { enabled: false, reason: "ARTIFACT_SET_INVALID" });
-  assert.deepEqual(validateUpdateManifest({ ...manifest, version: "1.0.0-rc.5" }, { currentVersion: "1.0.0-rc.5", channel: "preview" }), { enabled: false, reason: "VERSION_NOT_NEWER" });
+  const expected = { currentVersion: "1.0.0-rc.5", channel: "preview" as const, approvedPublisherSubject: APPROVED_PUBLISHER };
+  assert.deepEqual(validateUpdateManifest(manifest, expected), { enabled: true, reason: "READY" });
+  assert.deepEqual(validateUpdateManifest({ ...manifest, signatureState: "UNSIGNED" }, expected), { enabled: false, reason: "SIGNATURE_INVALID" });
+  assert.deepEqual(validateUpdateManifest({ ...manifest, publisher: "UNKNOWN" }, expected), { enabled: false, reason: "SIGNATURE_INVALID" });
+  assert.deepEqual(validateUpdateManifest({ ...manifest, approvedPublisherSubject: "CN=Other Publisher" }, expected), { enabled: false, reason: "PUBLISHER_MISMATCH" });
+  assert.deepEqual(validateUpdateManifest(manifest, { ...expected, approvedPublisherSubject: "CN=Other Publisher" }), { enabled: false, reason: "PUBLISHER_MISMATCH" });
+  assert.deepEqual(validateUpdateManifest(manifest, { currentVersion: expected.currentVersion, channel: expected.channel }), { enabled: false, reason: "SIGNATURE_INVALID" });
+  assert.deepEqual(validateUpdateManifest({ ...manifest, artifacts: manifest.artifacts.slice(0, 2) }, expected), { enabled: false, reason: "ARTIFACT_SET_INVALID" });
+  assert.deepEqual(validateUpdateManifest({ ...manifest, version: "1.0.0-rc.5" }, expected), { enabled: false, reason: "VERSION_NOT_NEWER" });
 });
 
 test("artifact hashes are verified before an update is admitted", async () => {
@@ -62,8 +81,8 @@ test("updater delays startup, serializes checks, waits for clean relay state, an
   const adapter = new FakeUpdater();
   let delayed: (() => void) | undefined;
   let relay: { activity: "IDLE" | "RUNNING"; cleanupConfirmed: boolean } = { activity: "IDLE", cleanupConfirmed: true };
-  const manifest = { version: "1.0.0-rc.6", channel: "preview", platform: "windows", architecture: "x64", publisher: "CN=SignPath Foundation", timestamped: true, minimumUpdaterVersion: "1.0.0", signatureState: "SIGNED", artifacts: [{ filename: "Setup.exe", size: 1, sha256: "a".repeat(64), kind: "setup" }, { filename: "full.nupkg", size: 1, sha256: "b".repeat(64), kind: "squirrel-full" }, { filename: "RELEASES", size: 1, sha256: "c".repeat(64), kind: "squirrel-releases" }] };
-  const controller = new UpdaterController({ adapter, currentVersion: "1.0.0-rc.5", channel: "preview", publicUpdatesEnabled: true, feedUrl: "http://127.0.0.1:43127/preview/win32/x64", allowLocalhostFeed: true, loadManifest: async () => manifest, startDelayMs: 10_000, intervalMs: 21600000, setTimeout: (handler) => { delayed = handler; return 1 as unknown as ReturnType<typeof setTimeout>; }, clearTimeout: () => undefined, setInterval: () => 2 as unknown as ReturnType<typeof setInterval>, clearInterval: () => undefined, relayState: () => relay });
+  const manifest = { version: "1.0.0-rc.6", channel: "preview", platform: "windows", architecture: "x64", publisher: APPROVED_PUBLISHER, approvedPublisherSubject: APPROVED_PUBLISHER, timestamped: true, minimumUpdaterVersion: "1.0.0", signatureState: "SIGNED", artifacts: [{ filename: "Setup.exe", size: 1, sha256: "a".repeat(64), kind: "setup" }, { filename: "full.nupkg", size: 1, sha256: "b".repeat(64), kind: "squirrel-full" }, { filename: "RELEASES", size: 1, sha256: "c".repeat(64), kind: "squirrel-releases" }] };
+  const controller = new UpdaterController({ adapter, currentVersion: "1.0.0-rc.5", channel: "preview", publicUpdatesEnabled: true, approvedPublisherSubject: APPROVED_PUBLISHER, feedUrl: "http://127.0.0.1:43127/preview/win32/x64", allowLocalhostFeed: true, loadManifest: async () => manifest, startDelayMs: 10_000, intervalMs: 21600000, setTimeout: (handler) => { delayed = handler; return 1 as unknown as ReturnType<typeof setTimeout>; }, clearTimeout: () => undefined, setInterval: () => 2 as unknown as ReturnType<typeof setInterval>, clearInterval: () => undefined, relayState: () => relay });
   controller.start();
   assert.equal(adapter.checks, 0);
   delayed?.();
